@@ -1,0 +1,7 @@
+---
+# Default variables for FLARE VM role
+flare_vm_password: vagrant
+flare_vm_install_url: "https://raw.githubusercontent.com/mandiant/flare-vm/main/install.ps1"
+flare_vm_install_path: "C:\\install.ps1"
+flare_vm_installer_check_path: "C:\\ProgramData\\chocolatey\\lib\\flarevm.installer"
+

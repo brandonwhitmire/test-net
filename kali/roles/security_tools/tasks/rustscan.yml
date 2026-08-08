@@ -1,0 +1,53 @@
+---
+- name: Install rustscan
+  block:
+    - name: Check if rustscan is already installed
+      ansible.builtin.command: dpkg -l rustscan
+      register: security_tools_rustscan_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download rustscan
+      ansible.builtin.get_url:
+        url: https://github.com/bee-san/rustscan/releases/latest/download/rustscan.deb.zip
+        dest: /tmp/rustscan.deb.zip
+        mode: "0644"
+      when: security_tools_rustscan_check.rc != 0
+
+    - name: Unzip rustscan deb
+      ansible.builtin.unarchive:
+        src: /tmp/rustscan.deb.zip
+        dest: /tmp/
+        remote_src: true
+      when: security_tools_rustscan_check.rc != 0
+
+    - name: Find rustscan deb file
+      ansible.builtin.find:
+        paths: /tmp
+        patterns: "rustscan_*.deb"
+      register: security_tools_rustscan_deb_files
+      when: security_tools_rustscan_check.rc != 0
+
+    - name: Install rustscan deb package
+      ansible.builtin.apt:
+        deb: "{{ item.path }}"
+      loop: "{{ security_tools_rustscan_deb_files.files | default([]) }}"
+      become: true
+      register: security_tools_rustscan_install
+      failed_when: false
+      when: security_tools_rustscan_check.rc != 0 and security_tools_rustscan_deb_files.files | length > 0
+
+    - name: Fix rustscan dependencies if needed
+      ansible.builtin.apt:
+        name: "*"
+        state: present
+        update_cache: true
+      become: true
+      when: security_tools_rustscan_check.rc != 0 and security_tools_rustscan_install is failed
+
+    - name: Clean up rustscan downloads
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ ['/tmp/rustscan.deb.zip'] + (security_tools_rustscan_deb_files.files | default([]) | map(attribute='path') | list) }}"
+      when: security_tools_rustscan_check.rc != 0

@@ -1,0 +1,7 @@
+---
+linux_hostname: linux01
+linux_static_ip: "10.0.0.20"
+linux_prefix: 24
+# Path is relative to inventory/ (→ repo .vagrant/). Works from any cwd.
+ansible_ssh_private_key_file: "{{ inventory_dir }}/../../.vagrant/machines/linux/libvirt/private_key"
+ansible_ssh_common_args: "-o IdentitiesOnly=yes -o StrictHostKeyChecking=no"

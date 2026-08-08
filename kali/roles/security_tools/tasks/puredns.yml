@@ -1,0 +1,116 @@
+---
+- name: Install massdns and puredns
+  block:
+    - name: Install build dependencies for massdns
+      ansible.builtin.apt:
+        name:
+          - git
+          - build-essential
+        state: present
+        update_cache: false
+      become: true
+
+    - name: Check if massdns is already installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/massdns
+      register: security_tools_massdns_binary
+
+    - name: Clone massdns repository
+      ansible.builtin.git:
+        repo: https://github.com/blechschmidt/massdns.git
+        dest: /tmp/massdns
+        version: master
+      when: not security_tools_massdns_binary.stat.exists
+
+    - name: Build massdns
+      community.general.make:
+        chdir: /tmp/massdns
+      become: true
+      when: not security_tools_massdns_binary.stat.exists
+
+    - name: Install massdns to /usr/local/bin
+      ansible.builtin.copy:
+        src: /tmp/massdns/bin/massdns
+        dest: /usr/local/bin/massdns
+        mode: "0755"
+        remote_src: true
+      become: true
+      when: not security_tools_massdns_binary.stat.exists
+
+    - name: Clean up massdns build directory
+      ansible.builtin.file:
+        path: /tmp/massdns
+        state: absent
+      when: not security_tools_massdns_binary.stat.exists
+
+    - name: Verify massdns installation
+      ansible.builtin.command: /usr/local/bin/massdns --version
+      register: security_tools_massdns_version
+      changed_when: false
+      failed_when: false
+
+    - name: Check if puredns is already installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/puredns
+      register: security_tools_puredns_binary
+
+    - name: Get latest puredns release download URL
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/d3mondev/puredns/releases/latest
+        return_content: true
+      register: security_tools_puredns_release
+      when: not security_tools_puredns_binary.stat.exists
+
+    - name: Find Linux amd64 binary asset
+      ansible.builtin.set_fact:
+        security_tools_puredns_download_url: "{{ item.browser_download_url }}"
+      loop: "{{ security_tools_puredns_release.json.assets | default([]) }}"
+      when: not security_tools_puredns_binary.stat.exists and 'linux' in item.name | lower and 'amd64' in item.name | lower and item.name.endswith('.tar.gz')
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Download puredns binary
+      ansible.builtin.get_url:
+        url: "{{ security_tools_puredns_download_url }}"
+        dest: /tmp/puredns.tar.gz
+        mode: "0644"
+      when: not security_tools_puredns_binary.stat.exists and security_tools_puredns_download_url is defined
+
+    - name: Extract puredns binary
+      ansible.builtin.unarchive:
+        src: /tmp/puredns.tar.gz
+        dest: /tmp/
+        remote_src: true
+      when: not security_tools_puredns_binary.stat.exists and security_tools_puredns_download_url is defined
+
+    - name: Install puredns to /usr/local/bin
+      ansible.builtin.copy:
+        src: /tmp/puredns
+        dest: /usr/local/bin/puredns
+        mode: "0755"
+        remote_src: true
+      become: true
+      when: not security_tools_puredns_binary.stat.exists and security_tools_puredns_download_url is defined
+
+    - name: Clean up puredns download
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/puredns.tar.gz
+        - /tmp/puredns
+      when: not security_tools_puredns_binary.stat.exists and security_tools_puredns_download_url is defined
+
+    - name: Verify puredns installation
+      ansible.builtin.command: /usr/local/bin/puredns --version
+      register: security_tools_puredns_version
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure /usr/local/bin is in PATH for all users
+      ansible.builtin.lineinfile:
+        path: /etc/profile.d/usr-local-bin.sh
+        line: 'export PATH="$PATH:/usr/local/bin"'
+        create: true
+        mode: "0644"
+      become: true

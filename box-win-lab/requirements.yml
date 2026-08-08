@@ -1,0 +1,8 @@
+---
+# Ansible Galaxy Collections Requirements File
+collections:
+  - name: ansible.windows
+    version: '*'
+  - name: community.windows
+    version: '*'
+

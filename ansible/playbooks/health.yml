@@ -1,0 +1,334 @@
+---
+# Full lab health (Stages 1–3). From ansible/:
+#   ansible-playbook playbooks/health.yml
+#
+# Includes Kibana data views / Discover saved searches (kibana_lab).
+
+# ---------------------------------------------------------------------------
+# Stage 1 — reachability + Ansible connectivity
+# ---------------------------------------------------------------------------
+- name: "S1: ICMP reachability from controller"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Ping lab IPs
+      ansible.builtin.command: ping -c2 -W2 {{ item }}
+      loop:
+        - "{{ dc_ip }}"
+        - "{{ linux_ip }}"
+        - "{{ ws_ip }}"
+        - "{{ kali_ip }}"
+      loop_control:
+        label: "{{ item }}"
+      changed_when: false
+
+- name: "S1: WinRM alive (Windows)"
+  hosts: domain_controllers,workstations
+  gather_facts: false
+  tasks:
+    - name: win_ping
+      ansible.windows.win_ping:
+
+- name: "S1: SSH alive (Linux)"
+  hosts: linux
+  gather_facts: false
+  tasks:
+    - name: ping
+      ansible.builtin.ping:
+
+- name: "S1: Attacker reachability (Kali — no domain / no logging)"
+  hosts: attackers
+  gather_facts: false
+  tasks:
+    - name: SSH ping
+      ansible.builtin.ping:
+
+    - name: Can reach DC on lab net
+      ansible.builtin.command: ping -c2 -W2 {{ dc_ip }}
+      changed_when: false
+
+    - name: Can reach linux01 on lab net
+      ansible.builtin.command: ping -c2 -W2 {{ linux_ip }}
+      changed_when: false
+
+    - name: Internet via NAT (ICMP or HTTP)
+      ansible.builtin.shell: |
+        set -e
+        ping -c2 -W3 1.1.1.1 >/dev/null 2>&1 \
+          || curl -fsS --connect-timeout 5 -o /dev/null https://1.1.1.1
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+# ---------------------------------------------------------------------------
+# Stage 1 — AD / DNS / domain join
+# ---------------------------------------------------------------------------
+- name: "S1: Domain controller health"
+  hosts: domain_controllers
+  gather_facts: false
+  tasks:
+    - name: lab.local A record includes DC lab IP
+      ansible.windows.win_shell: |
+        $r = Resolve-DnsName -Name lab.local -Type A -ErrorAction Stop
+        $ips = @($r | Where-Object { $_.Type -eq 'A' } | ForEach-Object { $_.IPAddress })
+        if ($ips -notcontains '{{ dc_ip }}') {
+          throw "lab.local A records missing {{ dc_ip }} (got: $($ips -join ', '))"
+        }
+        "ok: $($ips -join ', ')"
+      changed_when: false
+
+    - name: Seeded lab users exist (alice, bob, charlie)
+      ansible.windows.win_shell: |
+        $want = @('alice','bob','charlie')
+        $have = @(Get-ADUser -Filter * -SearchBase 'OU=LabUsers,DC=lab,DC=local' |
+          Select-Object -ExpandProperty SamAccountName)
+        $missing = $want | Where-Object { $_ -notin $have }
+        if ($missing) { throw "missing users: $($missing -join ', ')" }
+        $have -join ','
+      register: lab_users
+      changed_when: false
+
+    - name: Seeded lab groups exist
+      ansible.windows.win_shell: |
+        $want = @('LabAdmins','HelpDesk','Developers')
+        foreach ($g in $want) {
+          Get-ADGroup -Identity $g -ErrorAction Stop | Out-Null
+        }
+        'ok'
+      changed_when: false
+
+    - name: Show seeded users
+      ansible.builtin.debug:
+        var: lab_users.stdout
+
+- name: "S1: Workstation domain membership"
+  hosts: workstations
+  gather_facts: false
+  tasks:
+    - name: Confirm domain join is lab.local
+      ansible.windows.win_shell: |
+        $d = (Get-CimInstance Win32_ComputerSystem).Domain
+        if ($d -ne 'lab.local') { throw "expected lab.local, got $d" }
+        $d
+      register: join_check
+      changed_when: false
+
+    - name: Show domain
+      ansible.builtin.debug:
+        var: join_check.stdout
+
+# ---------------------------------------------------------------------------
+# Stage 2 — Sysmon
+# ---------------------------------------------------------------------------
+- name: "S2: Sysmon health (Windows)"
+  hosts: domain_controllers,workstations
+  gather_facts: false
+  tasks:
+    - name: Sysmon64 service running
+      ansible.windows.win_service_info:
+        name: Sysmon64
+      register: sysmon_svc
+
+    - name: Assert Sysmon64 started
+      ansible.builtin.assert:
+        that:
+          - (sysmon_svc.services | default([])) | length > 0
+          - sysmon_svc.services[0].state == 'started'
+        fail_msg: Sysmon64 not installed or not started
+
+    - name: Recent Sysmon Operational events
+      ansible.windows.win_shell: |
+        $n = (Get-WinEvent -LogName 'Microsoft-Windows-Sysmon/Operational' -MaxEvents 5 -ErrorAction Stop).Count
+        if ($n -lt 1) { throw 'no Sysmon events' }
+        "events=$n"
+      changed_when: false
+
+- name: "S2: Sysmon health (Linux)"
+  hosts: linux
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Sysmon service active
+      ansible.builtin.command: systemctl is-active sysmon
+      register: sysmon_active
+      changed_when: false
+      failed_when: sysmon_active.stdout != 'active'
+
+    - name: Sysmon process present
+      ansible.builtin.command: pgrep -x sysmon
+      changed_when: false
+
+# ---------------------------------------------------------------------------
+# Stage 3 — ELK + shippers
+# ---------------------------------------------------------------------------
+- name: "S3: ELK services + HTTP (Linux)"
+  hosts: linux
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Elasticsearch systemd active
+      ansible.builtin.command: systemctl is-active elasticsearch
+      register: es_svc
+      changed_when: false
+      failed_when: es_svc.stdout != 'active'
+
+    - name: Kibana systemd active
+      ansible.builtin.command: systemctl is-active kibana
+      register: kb_svc
+      changed_when: false
+      failed_when: kb_svc.stdout != 'active'
+
+    - name: Filebeat systemd active
+      ansible.builtin.command: systemctl is-active filebeat
+      register: fb_svc
+      changed_when: false
+      failed_when: fb_svc.stdout != 'active'
+
+    - name: Elasticsearch HTTP
+      ansible.builtin.uri:
+        url: "{{ elk_elasticsearch_url }}"
+        status_code: 200
+
+    - name: Elasticsearch cluster not red
+      ansible.builtin.uri:
+        url: "{{ elk_elasticsearch_url }}/_cluster/health"
+        return_content: true
+      register: es_health
+      failed_when: es_health.json.status | default('red') == 'red'
+
+    - name: Kibana API status
+      ansible.builtin.uri:
+        url: "{{ elk_kibana_url }}/api/status"
+        headers:
+          kbn-xsrf: "true"
+        status_code: 200
+
+- name: "S3: Winlogbeat service (Windows)"
+  hosts: domain_controllers,workstations
+  gather_facts: false
+  tasks:
+    - name: Winlogbeat service running
+      ansible.windows.win_service_info:
+        name: winlogbeat
+      register: wb
+
+    - name: Assert Winlogbeat started
+      ansible.builtin.assert:
+        that:
+          - (wb.services | default([])) | length > 0
+          - wb.services[0].state == 'started'
+        fail_msg: winlogbeat not installed or not started
+
+- name: "S3: Beat indices + Sysmon queries"
+  hosts: linux
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Wait for shippers to flush
+      ansible.builtin.pause:
+        seconds: 10
+
+    - name: Winlogbeat index has documents
+      ansible.builtin.uri:
+        url: "{{ elk_elasticsearch_url }}/.ds-winlogbeat-*/_count"
+        return_content: true
+      register: winlogbeat_count
+      retries: 12
+      delay: 10
+      until: (winlogbeat_count.json.count | default(0) | int) > 0
+
+    - name: Filebeat index has documents
+      ansible.builtin.uri:
+        url: "{{ elk_elasticsearch_url }}/.ds-filebeat-*/_count"
+        return_content: true
+      register: filebeat_count
+      retries: 12
+      delay: 10
+      until: (filebeat_count.json.count | default(0) | int) > 0
+
+    - name: ES has Windows Sysmon Operational events
+      ansible.builtin.uri:
+        url: "{{ elk_elasticsearch_url }}/.ds-winlogbeat-*/_search?size=0"
+        method: POST
+        body_format: json
+        body:
+          query:
+            bool:
+              should:
+                - term:
+                    winlog.channel.keyword: Microsoft-Windows-Sysmon/Operational
+                - match_phrase:
+                    winlog.channel: Microsoft-Windows-Sysmon/Operational
+              minimum_should_match: 1
+        return_content: true
+      register: sysmon_win_es
+      retries: 6
+      delay: 5
+      until: (sysmon_win_es.json.hits.total.value | default(0) | int) > 0
+
+    - name: ES has Linux Sysmon lines (filebeat)
+      ansible.builtin.uri:
+        url: "{{ elk_elasticsearch_url }}/.ds-filebeat-*/_search?size=0"
+        method: POST
+        body_format: json
+        body:
+          query:
+            bool:
+              should:
+                - match_phrase:
+                    message: Linux-Sysmon
+                - match_phrase:
+                    message: "sysmon["
+                - term:
+                    tags: sysmon
+              minimum_should_match: 1
+        return_content: true
+      register: sysmon_linux_es
+      retries: 6
+      delay: 5
+      until: (sysmon_linux_es.json.hits.total.value | default(0) | int) > 0
+
+    - name: Show beat document counts
+      ansible.builtin.debug:
+        msg: >-
+          winlogbeat={{ winlogbeat_count.json.count }},
+          filebeat={{ filebeat_count.json.count }},
+          win_sysmon_hits={{ sysmon_win_es.json.hits.total.value }},
+          linux_sysmon_hits={{ sysmon_linux_es.json.hits.total.value }}
+
+- name: "S3: Kibana Discover data views + saved searches"
+  hosts: linux
+  gather_facts: false
+  tasks:
+    - name: Lab data views exist
+      ansible.builtin.uri:
+        url: "{{ elk_kibana_url }}/api/data_views/data_view/{{ item }}"
+        headers:
+          kbn-xsrf: "true"
+        status_code: 200
+      loop:
+        - lab-beats
+        - lab-winlogbeat
+        - lab-filebeat
+
+    - name: Lab Discover saved searches exist
+      ansible.builtin.uri:
+        url: "{{ elk_kibana_url }}/api/saved_objects/search/{{ item }}"
+        headers:
+          kbn-xsrf: "true"
+        status_code: 200
+      loop:
+        - lab-all-sysmon
+        - lab-windows-sysmon
+        - lab-linux-sysmon
+
+    - name: Default data view is lab-beats
+      ansible.builtin.uri:
+        url: "{{ elk_kibana_url }}/api/data_views/default"
+        headers:
+          kbn-xsrf: "true"
+        return_content: true
+        status_code: 200
+      register: kibana_default_dv
+      failed_when: kibana_default_dv.json.data_view_id | default('') != 'lab-beats'

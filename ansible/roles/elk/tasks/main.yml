@@ -1,0 +1,153 @@
+---
+# Single-node Elasticsearch + Kibana (lab). Security disabled on private net.
+- name: Ensure gnupg available for keyring
+  ansible.builtin.apt:
+    name:
+      - gnupg
+      - apt-transport-https
+      - curl
+    state: present
+    update_cache: true
+
+- name: Ensure Elastic apt keyring dir exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Install Elastic GPG key
+  ansible.builtin.get_url:
+    url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    dest: /etc/apt/keyrings/elasticsearch.asc
+    mode: "0644"
+
+- name: Convert Elastic GPG key to dearmored keyring
+  ansible.builtin.command: >
+    gpg --dearmor --yes -o /etc/apt/keyrings/elasticsearch.gpg
+    /etc/apt/keyrings/elasticsearch.asc
+  args:
+    creates: /etc/apt/keyrings/elasticsearch.gpg
+
+- name: Add Elastic 8.x apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/etc/apt/keyrings/elasticsearch.gpg]
+      https://artifacts.elastic.co/packages/8.x/apt stable main
+    filename: elastic-8.x
+    state: present
+
+- name: Install Elasticsearch and Kibana
+  ansible.builtin.apt:
+    name:
+      - "elasticsearch={{ elastic_stack_version }}"
+      - "kibana={{ elastic_stack_version }}"
+    state: present
+    update_cache: true
+    allow_downgrade: true
+
+- name: Hold Elastic packages at pinned version
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - elasticsearch
+    - kibana
+
+- name: Stop Elasticsearch before writing lab config
+  ansible.builtin.service:
+    name: elasticsearch
+    state: stopped
+  when: elk_force_reconfig | default(false) | bool
+  failed_when: false
+
+- name: Stop Kibana before writing lab config
+  ansible.builtin.service:
+    name: kibana
+    state: stopped
+  when: elk_force_reconfig | default(false) | bool
+  failed_when: false
+
+- name: Configure Elasticsearch JVM heap
+  ansible.builtin.copy:
+    dest: /etc/elasticsearch/jvm.options.d/heap.options
+    owner: root
+    group: elasticsearch
+    mode: "0644"
+    content: |
+      -Xms{{ elasticsearch_heap }}
+      -Xmx{{ elasticsearch_heap }}
+  notify: Restart elasticsearch
+
+- name: Configure Elasticsearch (single-node lab)
+  ansible.builtin.copy:
+    dest: /etc/elasticsearch/elasticsearch.yml
+    owner: root
+    group: elasticsearch
+    mode: "0640"
+    content: |
+      cluster.name: pentest-lab
+      node.name: linux01
+      path.data: /var/lib/elasticsearch
+      path.logs: /var/log/elasticsearch
+      network.host: {{ linux_ip }}
+      http.port: {{ elasticsearch_port }}
+      discovery.type: single-node
+      xpack.security.enabled: false
+      xpack.security.enrollment.enabled: false
+      xpack.security.http.ssl.enabled: false
+      xpack.security.transport.ssl.enabled: false
+      ingest.geoip.downloader.enabled: false
+  notify: Restart elasticsearch
+
+- name: Configure Kibana
+  ansible.builtin.copy:
+    dest: /etc/kibana/kibana.yml
+    owner: root
+    group: kibana
+    mode: "0640"
+    content: |
+      server.name: pentest-lab-kibana
+      server.host: "{{ linux_ip }}"
+      server.port: {{ kibana_port }}
+      elasticsearch.hosts: ["{{ elk_elasticsearch_url }}"]
+      xpack.encryptedSavedObjects.encryptionKey: "pentestLabKibanaEncKey32bytes!!!!"
+      xpack.reporting.encryptionKey: "pentestLabReportEncKey32bytes!!!!"
+      xpack.security.encryptionKey: "pentestLabSecureEncKey32bytes!!!!"
+  notify: Restart kibana
+
+- name: Flush handlers so ES/Kibana restarts before wait
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start Elasticsearch
+  ansible.builtin.service:
+    name: elasticsearch
+    state: started
+    enabled: true
+
+- name: Wait for Elasticsearch HTTP
+  ansible.builtin.uri:
+    url: "{{ elk_elasticsearch_url }}"
+    method: GET
+    status_code: 200
+  register: es_health
+  retries: 36
+  delay: 5
+  until: es_health.status == 200
+
+- name: Enable and start Kibana
+  ansible.builtin.service:
+    name: kibana
+    state: started
+    enabled: true
+
+- name: Wait for Kibana API status
+  ansible.builtin.uri:
+    url: "{{ elk_kibana_url }}/api/status"
+    method: GET
+    status_code: [200]
+    headers:
+      kbn-xsrf: "true"
+  register: kibana_status
+  retries: 48
+  delay: 5
+  until: kibana_status.status == 200

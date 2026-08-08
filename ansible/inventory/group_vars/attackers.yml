@@ -1,0 +1,11 @@
+---
+kali_hostname: kali
+kali_static_ip: "{{ kali_ip }}"
+kali_prefix: 24
+
+# Attacker stays off lab DNS on purpose — it should discover the domain, not be
+# handed it. Flip to true to point resolv.conf at the DC.
+kali_use_lab_dns: false
+
+# Extra tooling on top of the Packer image (kali-linux-headless already ships most).
+kali_extra_packages: []

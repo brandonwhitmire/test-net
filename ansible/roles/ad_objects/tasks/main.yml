@@ -1,0 +1,58 @@
+---
+# Seed OUs, groups, and users for enumeration practice (idempotent).
+- name: Ensure lab OUs exist
+  microsoft.ad.ou:
+    name: "{{ item.name }}"
+    path: "{{ item.path }}"
+    state: present
+  loop: "{{ ad_ous }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Ensure lab security groups exist
+  microsoft.ad.group:
+    name: "{{ item.name }}"
+    path: "{{ item.path }}"
+    scope: "{{ item.scope }}"
+    category: "{{ item.category }}"
+    state: present
+  loop: "{{ ad_groups }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Ensure lab users exist
+  microsoft.ad.user:
+    name: "{{ item.name }}"
+    password: "{{ item.password }}"
+    path: "{{ item.ou }}"
+    update_password: always
+    password_never_expires: true
+    user_cannot_change_password: false
+    state: present
+    enabled: true
+  loop: "{{ ad_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+# DN identity — name-only lookup only finds objects in the default Users container.
+- name: Ensure users are members of custom lab groups
+  microsoft.ad.group:
+    identity: "{{ item.1.dn }}"
+    members:
+      add:
+        - "{{ item.0.name }}"
+  loop: "{{ ad_users | subelements('groups') }}"
+  when: item.1.name != 'Domain Admins'
+  loop_control:
+    label: "{{ item.0.name }} -> {{ item.1.name }}"
+
+- name: Ensure users are members of Domain Admins
+  microsoft.ad.group:
+    identity: "{{ item.1.dn }}"
+    members:
+      add:
+        - "{{ item.0.name }}"
+  loop: "{{ ad_users | subelements('groups') }}"
+  when: item.1.name == 'Domain Admins'
+  loop_control:
+    label: "{{ item.0.name }} -> Domain Admins"

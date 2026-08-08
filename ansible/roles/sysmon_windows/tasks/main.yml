@@ -1,0 +1,67 @@
+---
+# Install Sysmon64 with vendored SwiftOnSecurity config (idempotent).
+- name: Ensure Sysmon install directory exists
+  ansible.windows.win_file:
+    path: "{{ sysmon_windows_dir }}"
+    state: directory
+
+- name: Download Sysmon.zip from Sysinternals
+  ansible.windows.win_get_url:
+    url: "{{ sysmon_windows_download_url }}"
+    dest: "{{ sysmon_windows_zip }}"
+    force: false
+  register: sysmon_windows_download
+  retries: 12
+  delay: 10
+  until: sysmon_windows_download is succeeded
+
+- name: Check for Sysmon64.exe
+  ansible.windows.win_stat:
+    path: "{{ sysmon_windows_exe }}"
+  register: sysmon_exe
+
+- name: Expand Sysmon.zip
+  ansible.windows.win_shell: |
+    Expand-Archive -Path '{{ sysmon_windows_zip }}' -DestinationPath '{{ sysmon_windows_dir }}' -Force
+  when: not sysmon_exe.stat.exists
+
+- name: Deploy vendored Sysmon config
+  ansible.windows.win_copy:
+    src: sysmonconfig.xml
+    dest: "{{ sysmon_windows_config }}"
+  register: sysmon_config_copy
+
+- name: Check Sysmon64 service
+  ansible.windows.win_service_info:
+    name: "{{ sysmon_windows_service }}"
+  register: sysmon_svc
+
+- name: Set Sysmon installed fact
+  ansible.builtin.set_fact:
+    sysmon_installed: "{{ (sysmon_svc.services | default([])) | length > 0 }}"
+
+- name: Install Sysmon64 with vendored config
+  ansible.windows.win_command: >-
+    "{{ sysmon_windows_exe }}" -accepteula -i "{{ sysmon_windows_config }}"
+  when: not sysmon_installed
+
+- name: Update Sysmon64 config when content changed
+  ansible.windows.win_command: >-
+    "{{ sysmon_windows_exe }}" -c "{{ sysmon_windows_config }}"
+  when:
+    - sysmon_installed | bool
+    - sysmon_config_copy is changed
+
+- name: Ensure Sysmon64 service is running
+  ansible.windows.win_service:
+    name: "{{ sysmon_windows_service }}"
+    state: started
+    start_mode: auto
+
+- name: Confirm Sysmon operational log is enabled
+  ansible.windows.win_shell: |
+    $log = Get-WinEvent -ListLog 'Microsoft-Windows-Sysmon/Operational' -ErrorAction Stop
+    if (-not $log.IsEnabled) { throw 'Sysmon operational log disabled' }
+    "enabled=$($log.IsEnabled); records=$($log.RecordCount)"
+  register: sysmon_log
+  changed_when: false

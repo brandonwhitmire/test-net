@@ -1,0 +1,33 @@
+baseURL = "https://brandonwhitmire.github.io/test-net/"
+title = "test-net"
+enableRobotsTXT = true
+disableKinds = ["taxonomy", "term", "RSS"]
+
+[languages]
+  [languages.en]
+    locale = "en-US"
+    weight = 1
+
+[params]
+  description = "Local libvirt/KVM pentest lab — Vagrant + Ansible"
+
+[markup.goldmark.renderer]
+  unsafe = true
+
+[menu]
+  [[menu.main]]
+    name = "Architecture"
+    url = "/architecture/"
+    weight = 10
+  [[menu.main]]
+    name = "Network"
+    url = "/network/"
+    weight = 20
+  [[menu.main]]
+    name = "Machines"
+    url = "/machines/"
+    weight = 30
+  [[menu.main]]
+    name = "Stages"
+    url = "/stages/"
+    weight = 40

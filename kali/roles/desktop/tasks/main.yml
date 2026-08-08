@@ -1,0 +1,129 @@
+---
+- name: Configure LightDM autologin
+  block:
+    - name: Ensure LightDM config directory exists
+      ansible.builtin.file:
+        path: /etc/lightdm/lightdm.conf.d
+        state: directory
+        mode: "0755"
+      become: true
+
+    - name: Configure LightDM autologin
+      ansible.builtin.copy:
+        content: |
+          [seat:*]
+          autologin-user=vagrant
+          autologin-session=xfce
+        dest: /etc/lightdm/lightdm.conf.d/20-autologin.conf
+        mode: "0644"
+      become: true
+
+- name: Configure XFCE to disable screensaver and lock screen
+  block:
+    - name: Ensure XFCE config directory exists
+      ansible.builtin.file:
+        path: /home/vagrant/.config/xfce4/xfconf/xfce-perchannel-xml
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: "0755"
+
+    - name: Configure XFCE power manager
+      ansible.builtin.copy:
+        content: |
+          <?xml version="1.0" encoding="utf-8"?>
+          <channel name="xfce4-power-manager" version="1.0">
+            <property name="xfce4-power-manager" type="empty">
+              <property name="presentation-mode" type="bool" value="true"/>
+              <property name="dpms-enabled" type="bool" value="false"/>
+              <property name="blank-on-ac" type="int" value="0"/>
+              <property name="lock-screen-suspend-hibernate" type="bool" value="false"/>
+            </property>
+          </channel>
+        dest: /home/vagrant/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml
+        owner: vagrant
+        group: vagrant
+        mode: "0644"
+      become: true
+
+    - name: Configure XFCE session
+      ansible.builtin.copy:
+        content: |
+          <?xml version="1.0" encoding="utf-8"?>
+          <channel name="xfce4-session" version="1.0">
+            <property name="general" type="empty">
+              <property name="lockcommand" type="string" value=""/>
+            </property>
+          </channel>
+        dest: /home/vagrant/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml
+        owner: vagrant
+        group: vagrant
+        mode: "0644"
+      become: true
+
+    - name: Ensure vagrant owns all config files
+      ansible.builtin.file:
+        path: /home/vagrant/.config
+        owner: vagrant
+        group: vagrant
+        recurse: true
+      become: true
+
+- name: Configure Spice vdagent autostart
+  block:
+    - name: Ensure autostart directory exists
+      ansible.builtin.file:
+        path: /etc/xdg/autostart
+        state: directory
+        mode: "0755"
+      become: true
+
+    - name: Configure Spice vdagent autostart
+      ansible.builtin.copy:
+        content: |
+          [Desktop Entry]
+          Name=spice vdagent
+          Comment=spice guest agent for desktop integration
+          Exec=spice-vdagent
+          Terminal=false
+          Type=Application
+          X-GNOME-Autostart-enabled=true
+        dest: /etc/xdg/autostart/spice-vdagent.desktop
+        mode: "0644"
+      become: true
+
+- name: Remove light-locker package
+  ansible.builtin.apt:
+    name: light-locker
+    state: absent
+  become: true
+  failed_when: false
+
+- name: Deploy vim configuration
+  ansible.builtin.copy:
+    src: vim_rc
+    dest: /home/vagrant/.vimrc
+    owner: vagrant
+    group: vagrant
+    mode: "0644"
+  become: true
+
+- name: Deploy zsh customizations
+  block:
+    - name: Deploy zsh customizations file
+      ansible.builtin.copy:
+        src: zsh_customizations.zshrc
+        dest: /home/vagrant/.zshrc.local
+        owner: vagrant
+        group: vagrant
+        mode: "0644"
+
+    - name: Ensure .zshrc sources .zshrc.local if it doesn't already
+      ansible.builtin.lineinfile:
+        path: /home/vagrant/.zshrc
+        line: '[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local'
+        regexp: '^\[\[ -f ~/\.zshrc\.local \]\]'
+        create: true
+        owner: vagrant
+        group: vagrant
+        mode: "0644"

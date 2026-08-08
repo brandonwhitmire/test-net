@@ -1,0 +1,4 @@
+Source: microsoft/MSTIC-Sysmon linux/configs/main.xml
+Project: https://github.com/microsoft/MSTIC-Sysmon
+License: MIT (SysmonForLinux / Microsoft)
+Vendored: do not fetch live at provision time

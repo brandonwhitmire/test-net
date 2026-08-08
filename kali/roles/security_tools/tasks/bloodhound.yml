@@ -1,0 +1,37 @@
+---
+- name: Install bloodhound
+  block:
+    - name: Check if bloodhound-cli is already installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/bloodhound-cli
+      register: security_tools_bloodhound_binary
+
+    - name: Download bloodhound-cli
+      ansible.builtin.get_url:
+        url: https://github.com/specterops/bloodhound-cli/releases/latest/download/bloodhound-cli-linux-amd64.tar.gz
+        dest: /tmp/bloodhound-cli-linux-amd64.tar.gz
+        mode: "0644"
+      register: security_tools_bloodhound_download
+      when: not security_tools_bloodhound_binary.stat.exists
+
+    - name: Extract bloodhound-cli
+      ansible.builtin.unarchive:
+        src: /tmp/bloodhound-cli-linux-amd64.tar.gz
+        dest: /tmp/
+        remote_src: true
+      when: not security_tools_bloodhound_binary.stat.exists and (security_tools_bloodhound_download is changed or not ansible_check_mode)
+
+    - name: Install bloodhound-cli to /usr/local/bin
+      ansible.builtin.copy:
+        src: /tmp/bloodhound-cli
+        dest: /usr/local/bin/bloodhound-cli
+        mode: "0755"
+        remote_src: true
+      become: true
+      when: not security_tools_bloodhound_binary.stat.exists and (security_tools_bloodhound_download is changed or not ansible_check_mode)
+
+    - name: Verify bloodhound-cli installation
+      ansible.builtin.command: /usr/local/bin/bloodhound-cli --version
+      register: security_tools_bloodhound_version
+      changed_when: false
+      failed_when: false

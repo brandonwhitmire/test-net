@@ -1,0 +1,86 @@
+---
+# Canonical lab network + credentials (Stage 1+).
+# Packer mirror: packer/lab.pkrvars.hcl — keep in sync.
+
+lab_domain: lab.local
+lab_domain_netbios: LAB
+lab_domain_dn: "DC=lab,DC=local"
+# Alt if .local/mDNS causes pain: lab.internal
+
+lab_network_cidr: "10.0.0.0/24"
+lab_gateway: "10.0.0.1"
+dc_ip: "10.0.0.10"
+linux_ip: "10.0.0.20"
+ws_ip: "10.0.0.30"
+kali_ip: "10.0.0.50"
+lab_dns_server: "10.0.0.10"
+
+# Accounts (local lab only — intentionally simple)
+lab_vagrant_user: vagrant
+lab_vagrant_password: vagrant
+lab_admin_password: "AdminUser123!!!"   # Windows Administrator + Linux root
+lab_user_password: "LabUser123!!!"      # seeded domain users
+ad_admin_user: Administrator
+ad_admin_password: "AdminUser123!!!"
+ad_safe_mode_password: "AdminUser123!!!"
+
+# --- Stage 3: ELK ---
+# Memory budget on linux01 (8 GB RAM):
+#   ES heap 2g | Kibana ~1g | OS+Sysmon+Filebeat ~1–2g | headroom ~3g
+elastic_stack_version: "8.16.1"
+elasticsearch_heap: "2g"
+elasticsearch_host: "{{ linux_ip }}"
+elasticsearch_port: 9200
+kibana_port: 5601
+# Lab-only: security off so host browser + Beats can use plain HTTP on 10.0.0.0/24
+elasticsearch_security_enabled: false
+elk_kibana_url: "http://{{ linux_ip }}:{{ kibana_port }}"
+elk_elasticsearch_url: "http://{{ linux_ip }}:{{ elasticsearch_port }}"
+
+# Seeded directory objects
+ad_ous:
+  - name: LabUsers
+    path: "DC=lab,DC=local"
+  - name: LabWorkstations
+    path: "DC=lab,DC=local"
+  - name: LabServers
+    path: "DC=lab,DC=local"
+  - name: LabGroups
+    path: "DC=lab,DC=local"
+
+# No spaces — reliable sAMAccountName / CN
+ad_groups:
+  - name: LabAdmins
+    path: "OU=LabGroups,DC=lab,DC=local"
+    scope: global
+    category: security
+  - name: HelpDesk
+    path: "OU=LabGroups,DC=lab,DC=local"
+    scope: global
+    category: security
+  - name: Developers
+    path: "OU=LabGroups,DC=lab,DC=local"
+    scope: global
+    category: security
+
+ad_users:
+  - name: alice
+    password: "LabUser123!!!"
+    ou: "OU=LabUsers,DC=lab,DC=local"
+    groups:
+      - name: LabAdmins
+        dn: "CN=LabAdmins,OU=LabGroups,DC=lab,DC=local"
+      - name: Domain Admins
+        dn: "CN=Domain Admins,CN=Users,DC=lab,DC=local"
+  - name: bob
+    password: "LabUser123!!!"
+    ou: "OU=LabUsers,DC=lab,DC=local"
+    groups:
+      - name: HelpDesk
+        dn: "CN=HelpDesk,OU=LabGroups,DC=lab,DC=local"
+  - name: charlie
+    password: "LabUser123!!!"
+    ou: "OU=LabUsers,DC=lab,DC=local"
+    groups:
+      - name: Developers
+        dn: "CN=Developers,OU=LabGroups,DC=lab,DC=local"

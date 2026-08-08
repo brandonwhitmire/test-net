@@ -1,0 +1,16 @@
+---
+- name: Setup Metasploit database
+  block:
+    - name: Enable and start PostgreSQL
+      ansible.builtin.systemd:
+        name: postgresql
+        enabled: true
+        state: started
+      become: true
+
+    - name: Initialize Metasploit database
+      ansible.builtin.command: msfdb init
+      register: security_tools_msfdb_output
+      changed_when: "'The database appears to be already configured' not in security_tools_msfdb_output.stdout"
+      become: true
+      failed_when: false

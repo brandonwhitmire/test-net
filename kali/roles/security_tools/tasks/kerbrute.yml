@@ -1,0 +1,21 @@
+---
+- name: Install kerbrute
+  block:
+    - name: Check if kerbrute is already installed
+      ansible.builtin.stat:
+        path: /usr/sbin/kerbrute
+      register: security_tools_kerbrute_binary
+
+    - name: Download and install kerbrute to /usr/sbin
+      ansible.builtin.get_url:
+        url: https://github.com/ropnop/kerbrute/releases/download/v1.0.3/kerbrute_linux_amd64
+        dest: /usr/sbin/kerbrute
+        mode: "0755"
+      become: true
+      when: not security_tools_kerbrute_binary.stat.exists
+
+    - name: Verify kerbrute installation
+      ansible.builtin.command: /usr/sbin/kerbrute version
+      register: security_tools_kerbrute_version
+      changed_when: false
+      failed_when: false

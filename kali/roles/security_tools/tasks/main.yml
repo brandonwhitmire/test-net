@@ -1,0 +1,27 @@
+---
+- name: Include rockyou wordlist extraction
+  ansible.builtin.include_tasks: rockyou.yml
+
+- name: Include kerbrute installation
+  ansible.builtin.include_tasks: kerbrute.yml
+
+- name: Include rustscan installation
+  ansible.builtin.include_tasks: rustscan.yml
+
+- name: Include bloodhound installation
+  ansible.builtin.include_tasks: bloodhound.yml
+
+- name: Include puredns installation tasks
+  ansible.builtin.include_tasks: puredns.yml
+
+- name: Include git repositories cloning
+  ansible.builtin.include_tasks: git_repos.yml
+
+- name: Include Metasploit database setup
+  ansible.builtin.include_tasks: metasploit.yml
+
+- name: Include searchsploit database update
+  ansible.builtin.include_tasks: searchsploit.yml
+
+- name: Include seclists installation
+  ansible.builtin.include_tasks: seclists.yml

@@ -1,0 +1,28 @@
+---
+# Enforce lab Administrator password.
+# Ansible still connects as vagrant:vagrant.
+- name: Detect domain membership
+  ansible.windows.win_shell: |
+    $j = [bool](Get-CimInstance Win32_ComputerSystem).PartOfDomain
+    if ($j) { 'true' } else { 'false' }
+  register: is_domain_joined
+  changed_when: false
+
+- name: Set local Administrator password
+  ansible.windows.win_user:
+    name: Administrator
+    password: "{{ lab_admin_password }}"
+    state: present
+    account_disabled: false
+  when: is_domain_joined.stdout | trim != 'true'
+
+# Only on DCs — member servers lack rights to reset Domain Admins.
+- name: Set domain Administrator password
+  microsoft.ad.user:
+    name: Administrator
+    password: "{{ lab_admin_password }}"
+    update_password: always
+    password_never_expires: true
+  when:
+    - is_domain_joined.stdout | trim == 'true'
+    - "'domain_controllers' in group_names"

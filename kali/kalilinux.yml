@@ -1,0 +1,15 @@
+---
+# Gold-image factory entrypoint (see kali/Vagrantfile). The lab VM runs these
+# same roles via ansible/playbooks/attackers.yml, which adds lab wiring on top.
+- name: Provision Kali Linux Lab
+  hosts: all
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+  roles:
+    - base
+    - desktop
+    - development
+    - security_tools

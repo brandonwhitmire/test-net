@@ -1,0 +1,72 @@
+---
+# Join Windows host to lab.local (idempotent).
+- name: Get domain membership facts
+  ansible.windows.win_shell: |
+    $cs = Get-CimInstance Win32_ComputerSystem
+    [PSCustomObject]@{
+      PartOfDomain = [bool]$cs.PartOfDomain
+      Domain       = $cs.Domain
+    } | ConvertTo-Json -Compress
+  register: domain_membership_raw
+  changed_when: false
+
+- name: Parse domain membership
+  ansible.builtin.set_fact:
+    domain_membership: "{{ domain_membership_raw.stdout | from_json }}"
+
+- name: Find the lab network adapter
+  ansible.windows.win_shell: |
+    $adapter = Get-NetIPAddress -AddressFamily IPv4 |
+      Where-Object { $_.IPAddress -eq '{{ ansible_host }}' } |
+      Select-Object -First 1 -ExpandProperty InterfaceAlias
+    if (-not $adapter) {
+      throw 'No adapter owns lab IP {{ ansible_host }}'
+    }
+    $adapter
+  register: domain_join_lab_adapter
+  changed_when: false
+
+- name: Restore DHCP DNS on non-lab adapters
+  ansible.windows.win_shell: |
+    $labAdapter = '{{ domain_join_lab_adapter.stdout | trim }}'
+    Get-NetAdapter |
+      Where-Object { $_.InterfaceAlias -ne $labAdapter } |
+      ForEach-Object {
+        Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex -ResetServerAddresses
+      }
+  changed_when: false
+
+- name: Set domain DNS on the lab adapter
+  ansible.windows.win_dns_client:
+    adapter_names: "{{ domain_join_lab_adapter.stdout | trim }}"
+    ipv4_addresses:
+      - "{{ lab_dns_server }}"
+
+- name: Wait for DC DNS (TCP/53)
+  ansible.windows.win_wait_for:
+    host: "{{ lab_dns_server }}"
+    port: 53
+    timeout: 300
+  when: (not domain_membership.PartOfDomain) or
+        (domain_membership.Domain | lower != lab_domain | lower)
+
+- name: Wait for DC LDAP (TCP/389)
+  ansible.windows.win_wait_for:
+    host: "{{ lab_dns_server }}"
+    port: 389
+    timeout: 300
+  when: (not domain_membership.PartOfDomain) or
+        (domain_membership.Domain | lower != lab_domain | lower)
+
+- name: Join {{ lab_domain }}
+  microsoft.ad.membership:
+    dns_domain_name: "{{ lab_domain }}"
+    domain_admin_user: "{{ ad_admin_user }}@{{ lab_domain }}"
+    domain_admin_password: "{{ ad_admin_password }}"
+    domain_ou_path: "{{ domain_join_ou | default(omit) }}"
+    hostname: "{{ workstation_hostname | default(inventory_hostname) }}"
+    state: domain
+    reboot: true
+    reboot_timeout: 900
+  when: (not domain_membership.PartOfDomain) or
+        (domain_membership.Domain | lower != lab_domain | lower)

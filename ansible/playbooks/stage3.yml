@@ -1,0 +1,23 @@
+---
+# Stage 3 — ELK + shippers (re-runnable alone)
+# Order: ELK → shippers → Kibana Discover data views / saved searches.
+- name: Stage 3 — ELK on Linux
+  hosts: linux
+  become: true
+  gather_facts: true
+  roles:
+    - role: elk
+    - role: filebeat_sysmon
+
+- name: Stage 3 — Winlogbeat on Windows
+  hosts: domain_controllers,workstations
+  gather_facts: true
+  roles:
+    - role: winlogbeat
+
+- name: Stage 3 — Kibana Discover defaults
+  hosts: linux
+  become: false
+  gather_facts: false
+  roles:
+    - role: kibana_lab

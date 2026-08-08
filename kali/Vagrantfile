@@ -1,0 +1,44 @@
+# frozen_string_literal: true
+
+# Golden-image factory for the lab attacker box.
+# Lab runtime VM is defined in the repo-root Vagrantfile (`vagrant up kali`).
+#
+# Workflow:
+#   ./1_create_gold_image.sh   # provision from base → snapshot gold_image_kali
+#   vagrant package --output kali-box.box && vagrant box add -f kali-box kali-box.box
+#
+# Creds: vagrant/vagrant
+
+Vagrant.configure('2') do |config|
+  # Fresh rebuild from upstream; switch to "kali-box" to re-provision an existing gold.
+  config.vm.box = 'kalilinux/rolling'
+  # config.vm.box = 'kali-box'
+  config.vm.box_check_update = false
+  config.vm.hostname = 'kali-lab'
+
+  config.vm.provider :libvirt do |v|
+    host_mem_kb = `grep MemTotal /proc/meminfo | awk '{print $2}'`.to_i
+    if host_mem_kb > 12_582_912
+      v.memory = 8192
+      v.cpus = 4
+    else
+      v.memory = 2048
+      v.cpus = 2
+    end
+    v.management_network_device = 'virbr0'
+    v.video_type = 'qxl'
+    v.video_vram = 32_768
+    v.graphics_type = 'spice'
+    v.channel type: 'spicevmc', target_type: 'virtio', target_name: 'com.redhat.spice.0'
+  end
+
+  config.vm.synced_folder '.', '/vagrant',
+                          type: 'rsync',
+                          rsync__exclude: ['.git/', '.venv/', '.vagrant/', '*.ovpn']
+
+  config.vm.provision 'ansible' do |ansible|
+    ansible.playbook = 'kalilinux.yml'
+    ansible.limit = 'all'
+    ansible.compatibility_mode = '2.0'
+  end
+end

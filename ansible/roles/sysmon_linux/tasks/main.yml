@@ -1,0 +1,87 @@
+---
+# Install Sysmon for Linux with vendored MSTIC config (idempotent).
+- name: Ensure Microsoft package repo is registered
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if [ -f /etc/apt/sources.list.d/microsoft-prod.list ] || [ -f /etc/apt/sources.list.d/microsoft-prod.sources ]; then
+      echo present
+      exit 0
+    fi
+    curl -fsSL "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb" \
+      -o /tmp/packages-microsoft-prod.deb
+    dpkg -i /tmp/packages-microsoft-prod.deb
+    echo installed
+  args:
+    executable: /bin/bash
+  register: ms_repo
+  changed_when: "'installed' in ms_repo.stdout"
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Apt update after Microsoft repo add
+  ansible.builtin.apt:
+    update_cache: true
+  when: ms_repo is changed
+
+- name: Install Sysmon for Linux packages
+  ansible.builtin.apt:
+    name: "{{ sysmon_linux_packages }}"
+    state: present
+    update_cache: true
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Ensure Sysmon config directory exists
+  ansible.builtin.file:
+    path: "{{ sysmon_linux_config_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Deploy vendored Sysmon config
+  ansible.builtin.copy:
+    src: sysmonconfig.xml
+    dest: "{{ sysmon_linux_config }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: sysmon_config_copy
+
+- name: Check whether Sysmon is already installed/running
+  ansible.builtin.command: systemctl is-active {{ sysmon_linux_service }}
+  register: sysmon_active
+  changed_when: false
+  failed_when: false
+
+- name: Install Sysmon with vendored config
+  ansible.builtin.command: sysmon -accepteula -i {{ sysmon_linux_config }}
+  when: sysmon_active.stdout | default('') != 'active'
+  register: sysmon_install
+
+- name: Update Sysmon config when content changed
+  ansible.builtin.command: sysmon -c {{ sysmon_linux_config }}
+  when:
+    - sysmon_active.stdout | default('') == 'active'
+    - sysmon_config_copy is changed
+  register: sysmon_config_update
+
+- name: Ensure Sysmon service is enabled and started
+  ansible.builtin.service:
+    name: "{{ sysmon_linux_service }}"
+    state: started
+    enabled: true
+
+- name: Confirm Sysmon is logging (journal has recent sysmon entries or process up)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    systemctl is-active {{ sysmon_linux_service }}
+    # Sysmon for Linux writes to syslog/journal; accept either recent journal hits or active unit
+    if journalctl -u {{ sysmon_linux_service }} -n 5 --no-pager 2>/dev/null | grep -qi .; then
+      echo journal-ok
+    elif journalctl -t sysmon -n 5 --no-pager 2>/dev/null | grep -qi .; then
+      echo journal-tag-ok
+    else
+      # Fresh install may not have many lines yet — process presence is enough
+      pgrep -x sysmon >/dev/null && echo process-ok
+    fi
+  args:
+    executable: /bin/bash
+  register: sysmon_log_check
+  changed_when: false

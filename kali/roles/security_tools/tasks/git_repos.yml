@@ -1,0 +1,14 @@
+---
+- name: Ensure security tools base directory exists
+  ansible.builtin.file:
+    path: "{{ security_tools_base_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Clone security tools git repositories
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ item.dest | default(security_tools_base_dir ~ '/' ~ (item.repo | basename | regex_replace('\\.git$', ''))) }}"
+    version: "{{ item.version | default('master') }}"
+  loop: "{{ security_tools_git_repos }}"
+  failed_when: false

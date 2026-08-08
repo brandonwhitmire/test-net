@@ -1,0 +1,85 @@
+---
+# Configure Kibana Discover for Winlogbeat + Filebeat (idempotent via override).
+- name: Wait for Kibana API
+  ansible.builtin.uri:
+    url: "{{ elk_kibana_url }}/api/status"
+    method: GET
+    status_code: 200
+    headers:
+      kbn-xsrf: "true"
+  register: kibana_lab_status
+  retries: 24
+  delay: 5
+  until: kibana_lab_status.status == 200
+
+- name: Create or override lab data views
+  ansible.builtin.uri:
+    url: "{{ elk_kibana_url }}/api/data_views/data_view"
+    method: POST
+    status_code: [200]
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: application/json
+    body_format: json
+    body:
+      data_view:
+        id: "{{ item.id }}"
+        title: "{{ item.title }}"
+        name: "{{ item.name }}"
+        timeFieldName: "@timestamp"
+        allowNoIndex: true
+      override: true
+  loop: "{{ kibana_lab_data_views }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Set default data view to lab beats
+  ansible.builtin.uri:
+    url: "{{ elk_kibana_url }}/api/data_views/default"
+    method: POST
+    status_code: [200]
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: application/json
+    body_format: json
+    body:
+      data_view_id: "{{ kibana_lab_default_data_view_id }}"
+      force: true
+
+- name: Create or overwrite Discover saved searches
+  ansible.builtin.uri:
+    url: "{{ elk_kibana_url }}/api/saved_objects/search/{{ item.id }}?overwrite=true"
+    method: POST
+    status_code: [200]
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: application/json
+    body_format: json
+    body:
+      attributes:
+        title: "{{ item.title }}"
+        description: "Pentest lab — provisioned by kibana_lab"
+        columns: "{{ item.columns }}"
+        sort:
+          - ["@timestamp", "desc"]
+        kibanaSavedObjectMeta:
+          searchSourceJSON: "{{ {'query': {'language': 'kuery', 'query': item.query}, 'filter': [], 'indexRefName': 'kibanaSavedObjectMeta.searchSourceJSON.index'} | to_json }}"
+      references:
+        - name: kibanaSavedObjectMeta.searchSourceJSON.index
+          type: index-pattern
+          id: "{{ item.data_view_id }}"
+  loop: "{{ kibana_lab_saved_searches }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Apply Kibana UI settings (Discover default + time range)
+  ansible.builtin.uri:
+    url: "{{ elk_kibana_url }}/api/kibana/settings"
+    method: POST
+    status_code: [200]
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: application/json
+    body_format: json
+    body:
+      changes: "{{ kibana_lab_ui_settings }}"

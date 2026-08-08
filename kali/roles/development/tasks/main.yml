@@ -1,0 +1,185 @@
+---
+- name: Install Docker and Docker Compose
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-compose
+    state: present
+    update_cache: false
+  become: true
+
+- name: Enable and start Docker service
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+  become: true
+
+- name: Add vagrant user to docker group
+  ansible.builtin.user:
+    name: vagrant
+    groups: docker
+    append: true
+  become: true
+
+- name: Install tmux and xclip
+  ansible.builtin.apt:
+    name:
+      - tmux
+      - xclip
+    state: present
+    update_cache: false
+  become: true
+
+- name: Ensure tmux data and plugin directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: vagrant
+    group: vagrant
+    mode: "0755"
+  loop:
+    - /home/vagrant/my_data
+    - /home/vagrant/my_data/tmux_logs
+    - /home/vagrant/.tmux
+    - /home/vagrant/.tmux/plugins
+  become: true
+
+- name: Deploy tmux configuration
+  ansible.builtin.copy:
+    src: tmux.conf
+    dest: /home/vagrant/.tmux.conf
+    owner: vagrant
+    group: vagrant
+    mode: "0644"
+  become: true
+
+- name: Clone tmux plugin manager (tpm)
+  ansible.builtin.git:
+    repo: https://github.com/tmux-plugins/tpm
+    dest: /home/vagrant/.tmux/plugins/tpm
+    version: master
+    depth: 1
+  become: true
+  become_user: vagrant
+
+- name: Install tmux plugins via tpm
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export TMUX_PLUGIN_MANAGER_PATH="$HOME/.tmux/plugins/"
+    tmux start-server
+    tmux new-session -d -s __tpm_bootstrap
+    "$TMUX_PLUGIN_MANAGER_PATH/tpm/bin/install_plugins"
+    tmux kill-server
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: vagrant
+  environment:
+    HOME: /home/vagrant
+    TMUX_PLUGIN_MANAGER_PATH: /home/vagrant/.tmux/plugins/
+  changed_when: true
+
+- name: Autostart tmux session from bashrc
+  ansible.builtin.lineinfile:
+    path: /home/vagrant/.bashrc
+    line: '[ -z "$TMUX" ] && tmux new-session -A -s pentest-engagement'
+    regexp: 'tmux new-session -A -s pentest-engagement'
+    create: true
+    owner: vagrant
+    group: vagrant
+    mode: "0644"
+  become: true
+
+- name: Autostart tmux session from zshrc
+  ansible.builtin.lineinfile:
+    path: /home/vagrant/.zshrc
+    line: '[ -z "$TMUX" ] && tmux new-session -A -s pentest-engagement'
+    regexp: 'tmux new-session -A -s pentest-engagement'
+    create: true
+    owner: vagrant
+    group: vagrant
+    mode: "0644"
+  become: true
+
+- name: Setup Python 2 virtual environment
+  block:
+    - name: Ensure python2 is installed
+      ansible.builtin.apt:
+        name: python2
+        state: present
+        update_cache: false
+      become: true
+
+    - name: Check if pip2 is already installed
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/local/bin/pip2
+        - /usr/bin/pip2
+      register: development_pip2_candidates
+
+    - name: Set pip2 path fact
+      ansible.builtin.set_fact:
+        development_pip2: "{{ (development_pip2_candidates.results | selectattr('stat.exists') | map(attribute='item') | list | first) | default('') }}"
+
+    - name: Download pip 2.7 installer
+      ansible.builtin.get_url:
+        url: https://bootstrap.pypa.io/pip/2.7/get-pip.py
+        dest: /tmp/get-pip.py
+        mode: "0644"
+      register: development_pip_download
+      when: development_pip2 | length == 0
+
+    - name: Install pip for Python 2
+      ansible.builtin.command: python2 /tmp/get-pip.py
+      args:
+        creates: /usr/local/bin/pip2
+      become: true
+      when: development_pip2 | length == 0
+      register: development_pip_install
+
+    - name: Re-check pip2 path after install
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/local/bin/pip2
+        - /usr/bin/pip2
+      register: development_pip2_candidates_after
+      when: development_pip2 | length == 0
+
+    - name: Refresh pip2 path fact
+      ansible.builtin.set_fact:
+        development_pip2: "{{ development_pip2_candidates_after.results | selectattr('stat.exists') | map(attribute='item') | list | first }}"
+      when:
+        - development_pip2 | length == 0
+        - development_pip2_candidates_after is defined
+        - development_pip2_candidates_after.results is defined
+
+    - name: Fail if pip2 is still missing
+      ansible.builtin.fail:
+        msg: "pip2 not found after get-pip.py; python2 may be broken"
+      when: development_pip2 | length == 0
+
+    - name: Upgrade pip and setuptools for Python 2
+      ansible.builtin.command: "{{ development_pip2 }} install --upgrade pip setuptools"
+      become: true
+      changed_when: true
+
+    - name: Install virtualenv for Python 2
+      ansible.builtin.command: "{{ development_pip2 }} install virtualenv"
+      become: true
+      changed_when: true
+
+    - name: Create Python 2 virtual environment
+      ansible.builtin.command: python2 -m virtualenv /home/vagrant/py2-env
+      args:
+        creates: /home/vagrant/py2-env
+      become: true
+      become_user: vagrant
+
+    - name: Clean up pip installer
+      ansible.builtin.file:
+        path: /tmp/get-pip.py
+        state: absent
+      when: development_pip_download is changed

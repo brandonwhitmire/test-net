@@ -1,0 +1,46 @@
+---
+# Linux base: hostname + DNS aimed at the DC. Vagrant already assigns the static IP.
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ linux_hostname }}"
+
+- name: Set root password
+  ansible.builtin.user:
+    name: root
+    password: "{{ lab_admin_password | password_hash('sha512', 'labrootsalt01') }}"
+
+- name: Ensure hosts entry for ourselves
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^{{ linux_static_ip | regex_escape }}\b'
+    line: "{{ linux_static_ip }} {{ linux_hostname }}.{{ lab_domain }} {{ linux_hostname }}"
+    state: present
+
+- name: Ensure DC resolvable by hosts file (bootstrap before DNS works)
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^{{ lab_dns_server | regex_escape }}\b'
+    line: "{{ lab_dns_server }} dc.{{ lab_domain }} dc"
+    state: present
+
+- name: Ensure resolved drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Configure systemd-resolved DNS to DC
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/lab-dns.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Resolve]
+      DNS={{ lab_dns_server }}
+      Domains={{ lab_domain }}
+      DNSStubListener=yes
+  notify: Restart systemd-resolved
+
+- name: Flush handlers so DNS is live before play ends
+  ansible.builtin.meta: flush_handlers

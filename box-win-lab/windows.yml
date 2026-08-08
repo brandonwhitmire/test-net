@@ -1,0 +1,14 @@
+---
+- name: Provision Windows FLARE VM Lab
+  hosts: all
+  vars:
+    ansible_connection: winrm
+    ansible_winrm_transport: basic
+    ansible_winrm_server_cert_validation: ignore
+    ansible_user: vagrant
+    ansible_password: vagrant
+    flare_vm_password: vagrant
+
+  roles:
+    - flare-vm
+

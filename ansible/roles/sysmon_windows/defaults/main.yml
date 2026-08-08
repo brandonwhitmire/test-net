@@ -1,0 +1,7 @@
+---
+sysmon_windows_dir: 'C:\ProgramData\lab\sysmon'
+sysmon_windows_zip: 'C:\ProgramData\lab\sysmon\Sysmon.zip'
+sysmon_windows_exe: 'C:\ProgramData\lab\sysmon\Sysmon64.exe'
+sysmon_windows_config: 'C:\ProgramData\lab\sysmon\sysmonconfig.xml'
+sysmon_windows_service: Sysmon64
+sysmon_windows_download_url: 'https://download.sysinternals.com/files/Sysmon.zip'

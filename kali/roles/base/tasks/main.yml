@@ -1,0 +1,121 @@
+---
+# Packer can leave QEMU's 10.0.2.3 in resolv.conf; that DNS is unreachable under
+# Vagrant/libvirt. Point at the DHCP default gateway before touching apt.
+- name: Configure resolv.conf from default gateway
+  ansible.builtin.shell: |
+    set -euo pipefail
+    gw="$(ip route | awk '/default/ {print $3; exit}')"
+    test -n "${gw}"
+    printf 'nameserver %s\n' "${gw}" > /etc/resolv.conf
+  args:
+    executable: /bin/bash
+  become: true
+  changed_when: true
+
+- name: Ensure Kali apt sources are present
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/kali.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: http://http.kali.org/kali/
+      Suites: kali-rolling
+      Components: main contrib non-free non-free-firmware
+      Signed-By: /usr/share/keyrings/kali-archive-keyring.gpg
+  become: true
+
+# apt module + cache_valid_time can report success while fetch/DNS failed.
+# Force a real apt-get update and fail on the common soft-failure strings.
+- name: Update apt cache
+  ansible.builtin.command: apt-get update
+  become: true
+  register: base_apt_update_result
+  until: >-
+    base_apt_update_result.rc == 0
+    and 'Failed to fetch' not in (base_apt_update_result.stderr | default(''))
+    and 'Temporary failure resolving' not in (base_apt_update_result.stderr | default(''))
+    and 'Failed to fetch' not in (base_apt_update_result.stdout | default(''))
+  retries: 5
+  delay: 5
+  changed_when: true
+
+- name: Configure timezone
+  community.general.timezone:
+    name: "{{ base_timezone }}"
+  become: true
+
+- name: Install main packages
+  ansible.builtin.apt:
+    name:
+      - kali-desktop-xfce
+      - qemu-guest-agent
+      - spice-vdagent
+      - xserver-xorg-video-qxl
+      - lightdm
+      - curl
+      - python2
+      - ripgrep
+      - pipx
+      - sshpass
+      - gedit
+      - rlwrap
+      - hashcat-utils
+      - obsidian
+      - steghide
+      - stegcracker
+      - powershell
+      - autossh
+      - sshuttle
+      - putty-tools
+      - mono-runtime
+      - rubeus
+      - feroxbuster
+      - enum4linux-ng
+      - jq
+      - golang-go
+      - python3-scrapy
+      - ncat
+      - gss-ntlmssp
+      - krb5-user
+      - evolution
+      - metasploit-framework
+    state: present
+    install_recommends: false
+    update_cache: false
+  become: true
+
+- name: Clean up apt packages
+  ansible.builtin.apt:
+    autoremove: true
+    autoclean: true
+  become: true
+
+- name: Ensure Obsidian config directory exists with correct permissions
+  ansible.builtin.file:
+    path: /home/vagrant/.config/obsidian
+    state: directory
+    owner: vagrant
+    group: vagrant
+    mode: "0755"
+  become: false
+
+- name: Install plocate package
+  ansible.builtin.apt:
+    name: plocate
+    state: present
+    update_cache: false
+  become: true
+
+- name: Enable and start plocate-updatedb.timer service
+  ansible.builtin.systemd:
+    name: plocate-updatedb.timer
+    enabled: true
+    state: started
+  become: true
+
+- name: Run updatedb to create initial locate database
+  ansible.builtin.command: updatedb
+  become: true
+  changed_when: false

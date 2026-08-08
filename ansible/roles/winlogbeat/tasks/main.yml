@@ -1,0 +1,72 @@
+---
+# Forward Windows Sysmon Operational log to lab Elasticsearch.
+- name: Ensure Winlogbeat directory exists
+  ansible.windows.win_file:
+    path: "{{ winlogbeat_dir }}"
+    state: directory
+
+- name: Ensure Winlogbeat logs directory exists
+  ansible.windows.win_file:
+    path: "{{ winlogbeat_dir }}\\logs"
+    state: directory
+
+- name: Download Winlogbeat {{ winlogbeat_version }}
+  ansible.windows.win_get_url:
+    url: "{{ winlogbeat_download_url }}"
+    dest: "{{ winlogbeat_zip }}"
+    force: false
+
+- name: Check for Winlogbeat.exe
+  ansible.windows.win_stat:
+    path: "{{ winlogbeat_exe }}"
+  register: winlogbeat_exe_stat
+
+- name: Expand Winlogbeat zip
+  ansible.windows.win_shell: |
+    Expand-Archive -Path '{{ winlogbeat_zip }}' -DestinationPath '{{ winlogbeat_dir }}' -Force
+  when: not winlogbeat_exe_stat.stat.exists
+
+- name: Deploy Winlogbeat config
+  ansible.windows.win_template:
+    src: winlogbeat.yml.j2
+    dest: "{{ winlogbeat_config }}"
+  register: winlogbeat_cfg
+
+- name: Check Winlogbeat service
+  ansible.windows.win_service_info:
+    name: "{{ winlogbeat_service }}"
+  register: winlogbeat_svc
+
+- name: Install Winlogbeat Windows service
+  ansible.windows.win_shell: |
+    Set-Location (Split-Path '{{ winlogbeat_exe }}')
+    .\install-service-winlogbeat.ps1
+  args:
+    executable: powershell
+  when: (winlogbeat_svc.services | default([])) | length == 0
+
+- name: Load Winlogbeat index template (once)
+  ansible.windows.win_shell: |
+    & '{{ winlogbeat_exe }}' setup --index-management -c '{{ winlogbeat_config }}' -e
+  args:
+    creates: '{{ winlogbeat_dir }}\.template-loaded'
+  register: winlogbeat_setup
+  failed_when: false
+
+- name: Mark Winlogbeat template loaded
+  ansible.windows.win_copy:
+    dest: '{{ winlogbeat_dir }}\.template-loaded'
+    content: "{{ elastic_stack_version }}\n"
+  when: winlogbeat_setup.rc | default(1) == 0
+
+- name: Restart Winlogbeat when config changed
+  ansible.windows.win_service:
+    name: "{{ winlogbeat_service }}"
+    state: restarted
+  when: winlogbeat_cfg is changed
+
+- name: Ensure Winlogbeat service is running
+  ansible.windows.win_service:
+    name: "{{ winlogbeat_service }}"
+    state: started
+    start_mode: auto

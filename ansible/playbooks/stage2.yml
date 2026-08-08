@@ -1,0 +1,14 @@
+---
+# Stage 2 — Sysmon on all hosts (re-runnable alone)
+- name: Stage 2 — Sysmon on Windows
+  hosts: domain_controllers,workstations
+  gather_facts: true
+  roles:
+    - role: sysmon_windows
+
+- name: Stage 2 — Sysmon on Linux
+  hosts: linux
+  become: true
+  gather_facts: true
+  roles:
+    - role: sysmon_linux

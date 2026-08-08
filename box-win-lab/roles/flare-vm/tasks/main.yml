@@ -1,0 +1,37 @@
+---
+- name: Disable Windows Update service
+  ansible.windows.win_service:
+    name: wuauserv
+    state: stopped
+    start_mode: disabled
+
+- name: Download FLARE VM install script
+  ansible.windows.win_get_url:
+    url: "{{ flare_vm_install_url }}"
+    dest: "{{ flare_vm_install_path }}"
+    force: true
+
+- name: Set execution policy and run FLARE VM installation
+  ansible.windows.win_powershell:
+    script: |
+      Set-ExecutionPolicy Unrestricted -Scope LocalMachine -Force
+      Set-ExecutionPolicy Unrestricted -Scope CurrentUser -Force
+      Set-ExecutionPolicy Unrestricted -Scope Process -Force
+      'y', 'y' | & {{ flare_vm_install_path }} -password '{{ flare_vm_password }}' -execution-type 'boxstarter' -noGui -noWait
+      $LASTEXITCODE
+  register: flare_install_result
+  async: 3600
+  poll: 30
+  ignore_errors: true
+
+- name: Check if FLARE VM installer package exists
+  ansible.windows.win_stat:
+    path: "{{ flare_vm_installer_check_path }}"
+  register: flare_installer_check
+
+- name: Fail if installation did not complete
+  ansible.builtin.fail:
+    msg: "FLARE VM installation failed. Exit code: {{ flare_install_result.output | default('unknown') }}, Installer package exists: {{ flare_installer_check.stat.exists | default(false) }}"
+  when: 
+    - not flare_installer_check.stat.exists | default(false)
+    - (flare_install_result.output | default(0) | int) != 0

@@ -1,0 +1,22 @@
+winlogbeat.event_logs:
+  - name: Microsoft-Windows-Sysmon/Operational
+    ignore_older: 72h
+
+# Ship host identity for multi-machine queries
+name: "{{ inventory_hostname }}"
+tags: ["lab", "sysmon", "windows"]
+
+output.elasticsearch:
+  hosts: ["{{ elk_elasticsearch_url }}"]
+  # indices default: winlogbeat-*
+
+setup.ilm.enabled: true
+setup.template.enabled: true
+setup.kibana:
+  host: "{{ linux_ip }}:{{ kibana_port }}"
+
+logging.to_files: true
+logging.files:
+  path: '{{ winlogbeat_dir }}\logs'
+  name: winlogbeat
+  keepfiles: 3

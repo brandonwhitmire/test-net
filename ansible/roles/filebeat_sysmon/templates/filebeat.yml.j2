@@ -1,0 +1,32 @@
+filebeat.inputs:
+  - type: filestream
+    id: sysmon-linux-syslog
+    enabled: true
+    paths:
+      - /var/log/syslog
+    prospector.scanner.exclude_files: ['\.gz$']
+    include_lines:
+      - 'sysmon\['
+      - 'Linux-Sysmon'
+    tags: ["lab", "sysmon", "linux"]
+    fields:
+      lab.host: "{{ inventory_hostname }}"
+    fields_under_root: false
+
+name: "{{ inventory_hostname }}"
+tags: ["lab", "sysmon", "linux"]
+
+output.elasticsearch:
+  hosts: ["{{ elk_elasticsearch_url }}"]
+
+setup.ilm.enabled: true
+setup.template.enabled: true
+setup.kibana:
+  host: "{{ linux_ip }}:{{ kibana_port }}"
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 3

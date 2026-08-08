@@ -1,0 +1,4 @@
+Source: SwiftOnSecurity/sysmon-config (sysmonconfig-export.xml)
+Project: https://github.com/SwiftOnSecurity/sysmon-config
+License: Creative Commons Attribution 4.0
+Vendored: do not fetch live at provision time

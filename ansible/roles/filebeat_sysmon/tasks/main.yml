@@ -1,0 +1,44 @@
+---
+# Forward Linux Sysmon (journald) to lab Elasticsearch.
+# Assumes Elastic apt repo already present (elk role on same host).
+- name: Install Filebeat
+  ansible.builtin.apt:
+    name: "filebeat={{ elastic_stack_version }}"
+    state: present
+    update_cache: true
+    allow_downgrade: true
+
+- name: Hold Filebeat at pinned version
+  ansible.builtin.dpkg_selections:
+    name: filebeat
+    selection: hold
+
+- name: Deploy Filebeat Sysmon config
+  ansible.builtin.template:
+    src: filebeat.yml.j2
+    dest: "{{ filebeat_config }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: filebeat_cfg
+  notify: Restart filebeat
+
+- name: Load Filebeat index template
+  ansible.builtin.command: filebeat setup --index-management -e
+  args:
+    creates: /var/lib/filebeat/.lab-template-loaded
+  register: filebeat_setup
+  failed_when: false
+
+- name: Mark Filebeat template loaded
+  ansible.builtin.file:
+    path: /var/lib/filebeat/.lab-template-loaded
+    state: touch
+    mode: "0644"
+  when: filebeat_setup.rc | default(1) == 0
+
+- name: Enable and start Filebeat
+  ansible.builtin.service:
+    name: filebeat
+    state: started
+    enabled: true

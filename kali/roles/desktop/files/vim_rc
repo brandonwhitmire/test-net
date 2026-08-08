@@ -1,0 +1,39 @@
+" Vim configuration for opnotes
+" F4: Insert target template
+" F5: Insert timestamp
+
+" Enable syntax highlighting and colors
+syntax on
+set termguicolors
+set background=dark
+colorscheme default
+
+" Define template variables
+let g:target_template = "=================================\nTARGET_IP_ADDRESS -- domain.com -- win/lin x32/x64\n=================================\nvpn-connect\nchsh -s $(which zsh)\necho 'export TARGET=TARGET_IP_ADDRESS' >> ~/.zshrc && source ~/.zshrc\necho \"\$TARGET TARGET\" | sudo tee -a /etc/hosts"
+let g:timestamp_delimiter = " -- "
+
+" Function to insert target template without leading newline
+function! InsertTargetTemplate()
+    let template = g:target_template . "\n"
+    let lines = split(template, '\n', 1)
+    " Append first line to current line
+    let current_line = getline('.')
+    call setline('.', current_line . lines[0])
+    " Append remaining lines below
+    if len(lines) > 1
+        call append(line('.'), lines[1:])
+    endif
+endfunction
+
+" F4 mappings for target template
+nnoremap <F4> :call InsertTargetTemplate()<CR>
+inoremap <F4> <Esc>:call InsertTargetTemplate()<CR>i
+vnoremap <F4> <Esc>:call InsertTargetTemplate()<CR>
+
+" F5 mappings for timestamp
+nnoremap <F5> I<C-R>=strftime('%Y-%m-%d %H:%M:%S') . g:timestamp_delimiter<CR>
+inoremap <F5> <Esc>I<C-R>=strftime('%Y-%m-%d %H:%M:%S') . g:timestamp_delimiter<CR>
+vnoremap <F5> <Esc>I<C-R>=strftime('%Y-%m-%d %H:%M:%S') . g:timestamp_delimiter<CR>
+
+set mouse=
+"set number

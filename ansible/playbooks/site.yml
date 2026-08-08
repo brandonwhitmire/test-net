@@ -1,0 +1,18 @@
+---
+# Full lab — Stages 1–3. Per-stage: stage2.yml / stage3.yml
+- name: Import domain controller play
+  ansible.builtin.import_playbook: domain_controllers.yml
+
+- name: Import linux play
+  ansible.builtin.import_playbook: linux.yml
+
+- name: Import workstation play
+  ansible.builtin.import_playbook: workstations.yml
+
+# Re-apply after Winlogbeat so Discover views cover Windows + Linux indices.
+- name: Kibana Discover defaults (post-shippers)
+  hosts: linux
+  become: false
+  gather_facts: false
+  roles:
+    - role: kibana_lab

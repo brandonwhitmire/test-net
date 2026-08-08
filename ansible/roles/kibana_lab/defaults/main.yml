@@ -1,0 +1,57 @@
+---
+# Pre-create Kibana data views + Discover saved searches for lab beats.
+kibana_lab_data_views:
+  - id: lab-winlogbeat
+    title: "winlogbeat-*"
+    name: "Windows (Winlogbeat)"
+  - id: lab-filebeat
+    title: "filebeat-*"
+    name: "Linux (Filebeat)"
+  - id: lab-beats
+    title: "filebeat-*,winlogbeat-*"
+    name: "Lab Sysmon (all beats)"
+
+kibana_lab_default_data_view_id: lab-beats
+
+# Discover opens this saved search (filters + columns) by default.
+kibana_lab_default_route: "/app/discover#/view/lab-all-sysmon"
+
+kibana_lab_saved_searches:
+  - id: lab-all-sysmon
+    title: "All Sysmon (lab)"
+    data_view_id: lab-beats
+    query: "tags : sysmon"
+    columns:
+      - host.name
+      - agent.name
+      - tags
+      - message
+  - id: lab-windows-sysmon
+    title: "Windows Sysmon"
+    data_view_id: lab-winlogbeat
+    query: "tags : windows and tags : sysmon"
+    columns:
+      - host.name
+      - agent.name
+      - event.code
+      - winlog.event_id
+      - message
+  - id: lab-linux-sysmon
+    title: "Linux Sysmon"
+    data_view_id: lab-filebeat
+    query: "tags : linux and tags : sysmon"
+    columns:
+      - host.name
+      - agent.name
+      - tags
+      - message
+
+kibana_lab_ui_settings:
+  defaultRoute: "{{ kibana_lab_default_route }}"
+  "theme:darkMode": "enabled"
+  "timepicker:timeDefaults": '{"from":"now-24h","to":"now"}'
+  defaultColumns:
+    - host.name
+    - agent.name
+    - tags
+    - message

@@ -1,0 +1,4 @@
+---
+# System timezone configuration
+# Set to Mexico City timezone by default
+base_timezone: "America/Mexico_City"

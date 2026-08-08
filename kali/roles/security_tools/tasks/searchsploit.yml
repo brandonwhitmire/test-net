@@ -1,0 +1,6 @@
+---
+- name: Update searchsploit database
+  ansible.builtin.command: searchsploit --update
+  become: true
+  failed_when: false
+  changed_when: false

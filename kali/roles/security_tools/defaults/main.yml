@@ -1,0 +1,12 @@
+---
+# Base directory for security tools git repositories
+# Uses target system's home directory (e.g., /home/vagrant in Vagrant boxes)
+security_tools_base_dir: "{{ ansible_env.HOME | default('/home/' ~ (ansible_user | default('vagrant'))) }}/1_tools"
+
+# Git repositories to clone for security tools
+# If dest is not specified, defaults to {{ security_tools_base_dir }}/<repo-name>
+security_tools_git_repos:
+  - repo: https://github.com/andrew-d/static-binaries.git
+    version: master
+  - repo: https://github.com/carlospolop/PEASS-ng.git
+    version: master

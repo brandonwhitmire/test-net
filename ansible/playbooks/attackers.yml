@@ -1,0 +1,26 @@
+---
+# Kali attacker. Deliberately excluded from site.yml — it is not part of the
+# managed estate, it is the thing attacking it.
+#
+# base/desktop/development/security_tools live in kali/roles (see roles_path in
+# ansible.cfg) and are shared with the gold-image factory, kali/kalilinux.yml.
+#
+#   --tags image   heavy build only (desktop, tooling) — slow
+#   --tags lab     lab wiring only (hostname, hosts file, DNS) — seconds
+- name: Kali attacker
+  hosts: attackers
+  become: true
+  gather_facts: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  roles:
+    - role: base
+      tags: [image]
+    - role: desktop
+      tags: [image]
+    - role: development
+      tags: [image]
+    - role: security_tools
+      tags: [image]
+    - role: kali_attacker
+      tags: [lab]

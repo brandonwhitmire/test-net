@@ -1,0 +1,62 @@
+---
+# External attacker box: no domain join, no Sysmon/Filebeat (it must stay
+# invisible to the lab's own telemetry). Networking is bootstrapped earlier by
+# kali/files/lab-network.sh — this role owns everything after that.
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ kali_hostname }}"
+
+- name: Set root password
+  ansible.builtin.user:
+    name: root
+    password: "{{ lab_admin_password | password_hash('sha512', 'labrootsalt01') }}"
+
+- name: Ensure hosts entry for ourselves
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^{{ kali_static_ip | regex_escape }}\b'
+    line: "{{ kali_static_ip }} {{ kali_hostname }}"
+    state: present
+
+- name: Map lab targets in /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^{{ item.ip | regex_escape }}\b'
+    line: "{{ item.ip }} {{ item.name }}.{{ lab_domain }} {{ item.name }}"
+    state: present
+  loop:
+    - { ip: "{{ dc_ip }}", name: dc }
+    - { ip: "{{ linux_ip }}", name: linux01 }
+    - { ip: "{{ ws_ip }}", name: ws01 }
+
+- name: Point resolver at the DC
+  ansible.builtin.copy:
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      nameserver {{ lab_dns_server }}
+      search {{ lab_domain }}
+  when: kali_use_lab_dns
+
+- name: Install extra attacker tooling
+  ansible.builtin.apt:
+    name: "{{ kali_extra_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: kali_extra_packages | length > 0
+
+- name: Verify lab reachability
+  ansible.builtin.command: ping -c 2 -W 3 {{ dc_ip }}
+  register: kali_ping_dc
+  changed_when: false
+  failed_when: false
+
+- name: Report lab reachability
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'Lab reachable — DC answers on ' ~ dc_ip
+         if kali_ping_dc.rc == 0
+         else 'DC ' ~ dc_ip ~ ' unreachable (is `vagrant up dc` running?)' }}

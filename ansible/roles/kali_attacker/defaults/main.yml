@@ -1,0 +1,6 @@
+---
+kali_hostname: kali
+kali_static_ip: "10.0.0.50"
+kali_prefix: 24
+kali_use_lab_dns: false
+kali_extra_packages: []

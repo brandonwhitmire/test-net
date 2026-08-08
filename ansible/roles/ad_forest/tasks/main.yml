@@ -1,0 +1,49 @@
+---
+# Promote this host to the lab.local AD DS forest (idempotent).
+- name: Install AD DS and DNS Windows features
+  ansible.windows.win_feature:
+    name:
+      - AD-Domain-Services
+      - DNS
+    state: present
+    include_management_tools: true
+  register: ad_features
+
+- name: Reboot if features require it
+  ansible.windows.win_reboot:
+    reboot_timeout: 600
+  when: ad_features.reboot_required | default(false)
+
+- name: Check whether this host is already a domain controller
+  ansible.windows.win_shell: |
+    $role = (Get-CimInstance Win32_ComputerSystem).DomainRole
+    if ($role -ge 4) { 'yes' } else { 'no' }
+  register: is_dc
+  changed_when: false
+
+- name: Create AD forest {{ lab_domain }}
+  microsoft.ad.domain:
+    dns_domain_name: "{{ lab_domain }}"
+    domain_netbios_name: "{{ lab_domain_netbios }}"
+    safe_mode_password: "{{ ad_safe_mode_password }}"
+    install_dns: true
+    reboot: true
+    reboot_timeout: 900
+  when: is_dc.stdout | trim == 'no'
+
+- name: Wait for AD Web Services after promote
+  ansible.windows.win_wait_for:
+    port: 9389
+    host: 127.0.0.1
+    delay: 15
+    timeout: 600
+
+- name: Ensure DNS zone for {{ lab_domain }} exists
+  ansible.windows.win_shell: |
+    Get-DnsServerZone -Name '{{ lab_domain }}' -ErrorAction Stop | Out-Null
+    'dns-ok'
+  register: dns_zone
+  changed_when: false
+  retries: 10
+  delay: 15
+  until: dns_zone.rc == 0

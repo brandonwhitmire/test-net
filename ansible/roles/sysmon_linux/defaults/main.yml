@@ -1,0 +1,8 @@
+---
+sysmon_linux_config: /etc/sysmonforlinux/sysmonconfig.xml
+sysmon_linux_config_dir: /etc/sysmonforlinux
+sysmon_linux_service: sysmon
+# packages from packages.microsoft.com (Ubuntu 22.04)
+sysmon_linux_packages:
+  - sysinternalsebpf
+  - sysmonforlinux

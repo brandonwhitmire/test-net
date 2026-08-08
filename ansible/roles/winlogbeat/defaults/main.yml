@@ -1,0 +1,9 @@
+---
+winlogbeat_version: "{{ elastic_stack_version }}"
+winlogbeat_dir: 'C:\ProgramData\lab\winlogbeat'
+winlogbeat_zip: 'C:\ProgramData\lab\winlogbeat\winlogbeat.zip'
+winlogbeat_exe: 'C:\ProgramData\lab\winlogbeat\winlogbeat-{{ elastic_stack_version }}-windows-x86_64\winlogbeat.exe'
+winlogbeat_config: 'C:\ProgramData\lab\winlogbeat\winlogbeat-{{ elastic_stack_version }}-windows-x86_64\winlogbeat.yml'
+winlogbeat_download_url: >-
+  https://artifacts.elastic.co/downloads/beats/winlogbeat/winlogbeat-{{ elastic_stack_version }}-windows-x86_64.zip
+winlogbeat_service: winlogbeat
