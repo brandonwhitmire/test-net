@@ -55,6 +55,14 @@ Vagrant.configure('2') do |config|
                   libvirt__forward_mode: 'nat',
                   libvirt__dhcp_enabled: false
 
+    # Host access: AD DS / file / remote admin (no SSH on this box)
+    dc.vm.network :forwarded_port, guest: 445, host: 1445, id: 'smb'
+    dc.vm.network :forwarded_port, guest: 5985, host: 5985, id: 'winrm'
+    dc.vm.network :forwarded_port, guest: 5986, host: 5986, id: 'winrm-https'
+    dc.vm.network :forwarded_port, guest: 3389, host: 3389, id: 'rdp'
+    dc.vm.network :forwarded_port, guest: 389, host: 1389, id: 'ldap'
+    dc.vm.network :forwarded_port, guest: 636, host: 1636, id: 'ldaps'
+
     dc.vm.provider :libvirt do |lv|
       lv.memory = 4096
       lv.cpus = 2
@@ -82,8 +90,12 @@ Vagrant.configure('2') do |config|
                      libvirt__forward_mode: 'nat',
                      libvirt__dhcp_enabled: false
 
+    # Host access: SSH + Kibana (ELK host — no SMB/WinRM/RDP/LDAP)
+    linux.vm.network :forwarded_port, guest: 22, host: 2222, id: 'ssh'
+    linux.vm.network :forwarded_port, guest: 5601, host: 8888, id: 'kibana'
+
     linux.vm.provider :libvirt do |lv|
-      lv.memory = 8192
+      lv.memory = 4096
       lv.cpus = 2
     end
 
@@ -111,6 +123,12 @@ Vagrant.configure('2') do |config|
                   libvirt__network_name: LAB_NETWORK,
                   libvirt__forward_mode: 'nat',
                   libvirt__dhcp_enabled: false
+
+    # Host access: file / remote admin (no SSH, no LDAP — not a DC)
+    ws.vm.network :forwarded_port, guest: 445, host: 3445, id: 'smb'
+    ws.vm.network :forwarded_port, guest: 5985, host: 35985, id: 'winrm'
+    ws.vm.network :forwarded_port, guest: 5986, host: 35986, id: 'winrm-https'
+    ws.vm.network :forwarded_port, guest: 3389, host: 33389, id: 'rdp'
 
     ws.vm.provider :libvirt do |lv|
       lv.memory = 4096
