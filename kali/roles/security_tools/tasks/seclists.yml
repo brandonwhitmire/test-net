@@ -1,5 +1,5 @@
 ---
-- name: Install seclists
+- name: Install seclists (takes a while)
   ansible.builtin.apt:
     name: seclists
     state: present

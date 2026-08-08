@@ -25,16 +25,16 @@ dc / ws01  --Winlogbeat-->  Elasticsearch :9200  <--Filebeat--  linux01 (sysmon 
 ## Network
 
 ```
-                    Kali Attacker
-                      10.0.0.50
-                         |
-              libvirt net: pentest-lab
-                   10.0.0.0/24 (NAT)
+              Kali Attacker
+                10.0.0.50
+                    |
+         libvirt net: pentest-lab
+             10.0.0.0/24 (NAT)
            __________|__________
           |          |          |
       10.0.0.10  10.0.0.20  10.0.0.30
          dc       linux01      ws01
-      AD + DNS   Ubuntu/ELK  Win11 join
+      AD + DNS     ELK        Win11
 ```
 
 | Host | Service | Host port → Guest |
@@ -55,11 +55,25 @@ dc / ws01  --Winlogbeat-->  Elasticsearch :9200  <--Filebeat--  linux01 (sysmon 
 - Domain: `lab.local` (alt: `lab.internal`)
 - Ubuntu box: `generic/ubuntu2204` **4.3.12**
 - Windows boxes: local Packer from [rgl/windows-vagrant](https://github.com/rgl/windows-vagrant)
-- Kali: local golden `kali-box` (Packer in `kali/packer/`) — not domain-joined, not logged
+- Kali: local golden `kali-box` (Packer in `kali/packer/`) — not domain-joined, not logged; **dual-homed** (mgmt eth0 = internet via `vagrant-libvirt` NAT, lab eth1 = `10.0.0.50`)
 - Guest DNS → DC `10.0.0.10` (domain members only; kali is external)
 - DHCP **disabled** on `pentest-lab` (static IPs only)
-- Kibana: http://10.0.0.20:5601 · Elasticsearch: http://10.0.0.20:9200 (security off — lab net only)
+- Kibana: <http://10.0.0.20:5601> · Elasticsearch: <http://10.0.0.20:9200> (security off — lab net only)
 
+### Internet isolation (optional, hypervisor)
+
+Guest firewalls are the wrong tool here — malware inside a box can undo them. Instead, cut the **management NIC** (`vagrant-libvirt` NAT) from libvirt so the guest physically has no carrier on the internet path. Kali is never touched.
+
+`pentest-lab` is **isolated** (no NAT): lab peers still talk on `10.0.0.0/24`, but there is no route out via `10.0.0.1`. That closes the “add a default route via the lab gateway” bypass.
+
+```bash
+./isolate-network.sh seal-lab   # seal the lab (isolated net + unplug target mgmt NICs)
+./isolate-network.sh on         # restore target internet (mgmt NICs back up)
+./isolate-network.sh off        # unplug mgmt NICs only (net already isolated)
+./isolate-network.sh status
+```
+
+While sealed, use lab IPs (not host forwarded ports) — those ports ride the management NIC.
 ## Credentials
 
 | Account | Password | Where |
@@ -170,7 +184,7 @@ Vendored configs (not fetched live):
 
 ## Log aggregation (ELK)
 
-- Browse to Kibana: http://10.0.0.20:5601 OR http://10.0.0.20:8888
+- Browse to Kibana: <http://10.0.0.20:5601> OR <http://10.0.0.20:8888>
 
 | Shipper | Hosts | Source |
 | ------- | ----- | ------ |

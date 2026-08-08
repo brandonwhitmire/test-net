@@ -52,7 +52,7 @@ Vagrant.configure('2') do |config|
     dc.vm.network :private_network,
                   ip: '10.0.0.10',
                   libvirt__network_name: LAB_NETWORK,
-                  libvirt__forward_mode: 'nat',
+                  libvirt__forward_mode: 'none',
                   libvirt__dhcp_enabled: false
 
     # Host access: AD DS / file / remote admin (no SSH on this box)
@@ -87,7 +87,7 @@ Vagrant.configure('2') do |config|
     linux.vm.network :private_network,
                      ip: '10.0.0.20',
                      libvirt__network_name: LAB_NETWORK,
-                     libvirt__forward_mode: 'nat',
+                     libvirt__forward_mode: 'none',
                      libvirt__dhcp_enabled: false
 
     # Host access: SSH + Kibana (ELK host — no SMB/WinRM/RDP/LDAP)
@@ -121,7 +121,7 @@ Vagrant.configure('2') do |config|
     ws.vm.network :private_network,
                   ip: '10.0.0.30',
                   libvirt__network_name: LAB_NETWORK,
-                  libvirt__forward_mode: 'nat',
+                  libvirt__forward_mode: 'none',
                   libvirt__dhcp_enabled: false
 
     # Host access: file / remote admin (no SSH, no LDAP — not a DC)
@@ -158,7 +158,7 @@ Vagrant.configure('2') do |config|
     kali.vm.network :private_network,
                     ip: '10.0.0.50',
                     libvirt__network_name: LAB_NETWORK,
-                    libvirt__forward_mode: 'nat',
+                    libvirt__forward_mode: 'none',
                     libvirt__dhcp_enabled: false
 
     kali.vm.provider :libvirt do |lv|
