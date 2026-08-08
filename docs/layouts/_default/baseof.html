@@ -3,18 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ if .IsHome }}{{ .Site.Title }}{{ else }}{{ .Title }} · {{ .Site.Title }}{{ end }}</title>
-  <meta name="description" content="{{ with .Description }}{{ . }}{{ else }}{{ .Site.Params.description }}{{ end }}">
+  <title>{{ .Site.Title }}</title>
+  <meta name="description" content="{{ .Site.Params.description }}">
   <link rel="stylesheet" href="{{ "css/site.css" | relURL }}">
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="{{ "/" | relURL }}">{{ .Site.Title }}</a>
-    <nav>
-      {{ range .Site.Menus.main }}
-      <a href="{{ .URL | relURL }}">{{ .Name }}</a>
-      {{ end }}
-    </nav>
+    <p class="tagline">{{ .Site.Params.description }}</p>
   </header>
   <main>
     {{ block "main" . }}{{ end }}

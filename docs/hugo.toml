@@ -1,7 +1,7 @@
 baseURL = "https://brandonwhitmire.github.io/test-net/"
 title = "test-net"
 enableRobotsTXT = true
-disableKinds = ["taxonomy", "term", "RSS"]
+disableKinds = ["taxonomy", "term", "RSS", "section"]
 
 [languages]
   [languages.en]
@@ -14,20 +14,26 @@ disableKinds = ["taxonomy", "term", "RSS"]
 [markup.goldmark.renderer]
   unsafe = true
 
-[menu]
-  [[menu.main]]
-    name = "Architecture"
-    url = "/architecture/"
-    weight = 10
-  [[menu.main]]
-    name = "Network"
-    url = "/network/"
-    weight = 20
-  [[menu.main]]
-    name = "Machines"
-    url = "/machines/"
-    weight = 30
-  [[menu.main]]
-    name = "Stages"
-    url = "/stages/"
-    weight = 40
+# Single source of truth: repo-root README.md is the site.
+[module]
+  [[module.mounts]]
+    source = "../README.md"
+    target = "content/_index.md"
+  [[module.mounts]]
+    source = "layouts"
+    target = "layouts"
+  [[module.mounts]]
+    source = "static"
+    target = "static"
+  [[module.mounts]]
+    source = "archetypes"
+    target = "archetypes"
+  [[module.mounts]]
+    source = "assets"
+    target = "assets"
+  [[module.mounts]]
+    source = "data"
+    target = "data"
+  [[module.mounts]]
+    source = "i18n"
+    target = "i18n"

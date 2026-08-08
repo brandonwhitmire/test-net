@@ -1,15 +1,52 @@
 # Local pentest lab (libvirt / KVM)
 
-Vagrant manages VMs. Ansible configures them. Stages 1–4 complete.
+Local AD + Sysmon + ELK lab. Vagrant manages VMs; Ansible configures them. Stages 1–4 complete.
 
-## Assumptions
+```bash
+vagrant up
+cd ansible && ansible-playbook playbooks/health.yml
+```
 
-- Provider: **libvirt + QEMU/KVM** (no VirtualBox).
-- Domain: `lab.local` (alt: `lab.internal` if mDNS fights `.local`).
-- Ubuntu box: `generic/ubuntu2204` **4.3.12**.
-- Windows boxes: local Packer builds from [rgl/windows-vagrant](https://github.com/rgl/windows-vagrant) — never Vagrant Cloud.
-- Kali attacker: local golden box `kali-box` (Packer in `kali/packer/`) — not domain-joined, not logged.
-- Private net `pentest-lab` `10.0.0.0/24`, NAT outbound so guests can update.
+Site: https://brandonwhitmire.github.io/test-net/ (this README, built by Hugo).
+
+## Architecture
+
+| Layer | Tool | Job |
+| ----- | ---- | --- |
+| Lifecycle | Vagrant + libvirt/KVM + `snapshot.sh` | take/save / restore / overwrite / delete |
+| Config | Ansible (host provisioner) | AD, Sysmon, ELK, shippers, Kali tooling |
+| Images | Local Packer (rgl) + `kali/packer` | Windows boxes + `kali-box` — never Vagrant Cloud for Win/Kali |
+
+### Data flow (Stage 3)
+
+```
+dc / ws01  --Winlogbeat-->  Elasticsearch :9200  <--Filebeat--  linux01 (sysmon syslog)
+                                      |
+                                   Kibana :5601
+```
+
+## Network
+
+```
+                    host (Arch)
+                         |
+              libvirt net: pentest-lab
+                   10.0.0.0/24 (NAT)
+      _____________|______________ ________
+     |             |              |        |
+ 10.0.0.10    10.0.0.20      10.0.0.30  10.0.0.50
+     dc         linux01          ws01      kali
+  AD + DNS    Ubuntu/ELK      Win11 join  attacker
+                                         (no domain)
+```
+
+- Domain: `lab.local` (alt: `lab.internal` if mDNS fights `.local`)
+- Ubuntu box: `generic/ubuntu2204` **4.3.12**
+- Windows boxes: local Packer from [rgl/windows-vagrant](https://github.com/rgl/windows-vagrant)
+- Kali: local golden `kali-box` (Packer in `kali/packer/`) — not domain-joined, not logged
+- Guest DNS → DC `10.0.0.10` (domain members only; kali is external)
+- DHCP **disabled** on `pentest-lab` (static IPs only)
+- Kibana: http://10.0.0.20:5601 · Elasticsearch: http://10.0.0.20:9200 (security off — lab net only)
 
 ## Credentials
 
@@ -19,7 +56,7 @@ Vagrant manages VMs. Ansible configures them. Stages 1–4 complete.
 | `Administrator` / `root` | `AdminUser123!!!` | Ansible after provision |
 | `alice` / `bob` / `charlie` | `LabUser123!!!` | AD (Ansible) |
 
-Vars: `ansible/inventory/group_vars/all.yml` and `packer/lab.pkrvars.hcl` (keep synced).
+Vars: `ansible/inventory/group_vars/all.yml` ↔ `packer/lab.pkrvars.hcl` (keep synced).
 
 ## Prerequisites
 
@@ -52,30 +89,46 @@ vagrant box list | grep -E 'windows-2022|windows-11-24h2|ubuntu2204|kali-box'
 
 ## Machines
 
-| Host    | Role        | IP         | RAM  | vCPU |
-| ------- | ----------- | ---------- | ---- | ---- |
-| dc      | AD DS + DNS | 10.0.0.10  | 4 GB | 2    |
-| linux   | Ubuntu 22.04 (`linux01` in Ansible) | 10.0.0.20 | 8 GB | 2 |
-| ws01    | Win11 join  | 10.0.0.30  | 4 GB | 2    |
-| kali    | Attacker (no domain / no logging) | 10.0.0.50 | 4 GB | 2 |
+| Host (Vagrant) | Ansible | OS | IP | RAM | Role |
+| -------------- | ------- | -- | -- | --- | ---- |
+| `dc` | `dc` | Windows Server 2022 | 10.0.0.10 | 4 GB | AD DS + DNS (`lab.local`) |
+| `linux` | `linux01` | Ubuntu 22.04 | 10.0.0.20 | 8 GB | Sysmon-for-Linux, ELK, Filebeat |
+| `ws01` | `ws01` | Windows 11 24H2 | 10.0.0.30 | 4 GB | Domain-joined workstation |
+| `kali` | `kali` | Kali (`kali-box`) | 10.0.0.50 | 4 GB | External attacker — no domain, no logging |
+
+### Boxes
+
+| Box | Source |
+| --- | ------ |
+| `windows-2022-amd64` | Local Packer: `make build-windows-2022-libvirt` |
+| `windows-11-24h2-amd64` | Local Packer: `make build-windows-11-24h2-libvirt` |
+| `generic/ubuntu2204` `4.3.12` | Vagrant Cloud (libvirt) |
+| `kali-box` | Packer UEFI in `kali/packer/` (see `kali/README.md`) |
+
+### Seeded AD
+
+- OUs: `LabUsers`, `LabWorkstations`, `LabServers`, `LabGroups`
+- Groups: `LabAdmins`, `HelpDesk`, `Developers`
+- Users: `alice` (LabAdmins + Domain Admins), `bob` (HelpDesk), `charlie` (Developers) — password `LabUser123!!!`
 
 ## Layout
 
 ```
 Vagrantfile
-snapshot.sh                         # Gold snapshot / restore / overwrite all lab VMs
-kali/                          # Attacker: Packer (UEFI kali-box), network bootstrap, roles
-docs/                          # Hugo site → GitHub Pages
+snapshot.sh                    # Gold snapshot / restore / overwrite all lab VMs
+README.md                      # This file — also the GitHub Pages site
+docs/                          # Hugo wrapper (mounts README.md)
 .github/workflows/docs.yml
-packer/{README.md,lab.pkrvars.hcl}   # Windows boxes (rgl)
+kali/                          # Attacker: Packer (UEFI kali-box), network bootstrap, roles
+packer/{README.md,lab.pkrvars.hcl}
 ansible/
   ansible.cfg
   requirements.yml
   inventory/hosts.yml
-  inventory/group_vars/{all,domain_controllers,linux,workstations}.yml
-  playbooks/{site,stage2,stage3,domain_controllers,linux,workstations,health}.yml
+  inventory/group_vars/{all,domain_controllers,linux,workstations,attackers}.yml
+  playbooks/{site,stage2,stage3,domain_controllers,linux,workstations,attackers,health}.yml
   roles/{ad_forest,ad_objects,domain_join,linux_base,windows_admin_password,windows_icmp,
-         sysmon_windows,sysmon_linux,elk,winlogbeat,filebeat_sysmon,kibana_lab}/
+         sysmon_windows,sysmon_linux,elk,winlogbeat,filebeat_sysmon,kibana_lab,kali_attacker}/
 ```
 
 ## Health check (all stages)
@@ -89,7 +142,7 @@ Covers Stages 1–3 (reachability including Kali, AD/DNS/join, Sysmon, ELK + bea
 
 ## Stage 1 — Core network
 
-Promotes `dc` to AD DS (`lab.local`), seeds OUs/users/groups, joins `ws01`, points `linux` DNS at the DC.
+Promotes `dc` to AD DS (`lab.local`), seeds OUs/users/groups, joins `ws01`, points `linux` DNS at the DC, brings up `kali` on `10.0.0.50`.
 
 ```bash
 # Bring up (serial: DC first — VAGRANT_NO_PARALLEL is set in Vagrantfile)
@@ -99,7 +152,7 @@ vagrant up
 vagrant up dc
 vagrant up linux
 vagrant up ws01
-vagrant up kali    # attacker on 10.0.0.50 — provisioned by playbooks/attackers.yml
+vagrant up kali
 ```
 
 Re-run Ansible only:
@@ -111,6 +164,7 @@ ansible-playbook playbooks/site.yml
 ansible-playbook playbooks/domain_controllers.yml
 ansible-playbook playbooks/linux.yml
 ansible-playbook playbooks/workstations.yml
+ansible-playbook playbooks/attackers.yml
 ```
 
 ### Verify
@@ -121,12 +175,6 @@ ansible-playbook playbooks/health.yml
 ```
 
 Expect: all plays green (ICMP, WinRM/SSH, DNS, users/groups, domain join).
-
-### Seeded AD objects
-
-- OUs: `LabUsers`, `LabWorkstations`, `LabServers`, `LabGroups`
-- Groups: `LabAdmins`, `HelpDesk`, `Developers`
-- Users: `alice` (LabAdmins + Domain Admins), `bob` (HelpDesk), `charlie` (Developers) — password `LabUser123!!!`
 
 ### Kali attacker
 
@@ -160,7 +208,7 @@ vagrant box add -f kali-box output-kali/kali-box-libvirt-1.0.box
 Then from the repo root:
 
 ```bash
-vagrant destroy -f kali        # drop any old VM built from the previous box
+vagrant destroy -f kali
 vagrant up kali
 ```
 
@@ -192,8 +240,10 @@ Pass VM names to limit scope (`./snapshot.sh restore kali ws01`), and `-f` / `--
 
 Vendored configs (not fetched live):
 
-- Windows: SwiftOnSecurity `sysmonconfig-export.xml` → `roles/sysmon_windows/files/sysmonconfig.xml`
-- Linux: MSTIC-Sysmon `linux/configs/main.xml` → `roles/sysmon_linux/files/sysmonconfig.xml`
+| Host | Agent | Config |
+| ---- | ----- | ------ |
+| dc, ws01 | Sysmon64 | SwiftOnSecurity → `roles/sysmon_windows/files/sysmonconfig.xml` |
+| linux01 | sysmonforlinux | MSTIC-Sysmon → `roles/sysmon_linux/files/sysmonconfig.xml` |
 
 Idempotent: install once; re-apply config only when the deployed file content changes.
 
@@ -211,7 +261,7 @@ cd ansible
 ansible-playbook playbooks/health.yml
 ```
 
-Expect: Sysmon64 running + events on Windows; `sysmon` active on linux01 (covered by health.yml).
+Expect: Sysmon64 running + events on Windows; `sysmon` active on linux01.
 
 ## Stage 3 — Log aggregation (ELK)
 
@@ -234,19 +284,12 @@ ansible-playbook playbooks/stage3.yml
 ```bash
 cd ansible
 ansible-playbook playbooks/health.yml
+xdg-open http://10.0.0.20:5601
 ```
 
 Expect: ES/Kibana/Filebeat/Winlogbeat up; beat indices have Sysmon docs; Kibana data views + Discover saved searches present.
 
-#### Browser
-
-```bash
-xdg-open http://10.0.0.20:5601
-```
-
 Landing opens **Discover** on **All Sysmon (lab)** (`tags : sysmon` over `filebeat-*,winlogbeat-*`). Open menu also has **Windows Sysmon** and **Linux Sysmon**.
-
-**Kibana URL:** http://10.0.0.20:5601
 
 ## Lifecycle
 
@@ -262,17 +305,10 @@ vagrant destroy -f         # remove VMs only (keeps pentest-lab net)
 Destroys all lab VMs and the libvirt network so the next `vagrant up` recreates everything from scratch (use after subnet/password changes or a broken lab):
 
 ```bash
-# From repo root
 vagrant destroy -f
-
-# Drop the lab network (ignore errors if already gone)
 virsh -c qemu:///system net-destroy pentest-lab 2>/dev/null || true
 virsh -c qemu:///system net-undefine pentest-lab 2>/dev/null || true
-
-# Optional: remove leftover conflicting nets on 10.0.0.0/24
-virsh -c qemu:///system net-list --all
-
-# Bring the lab back up
+virsh -c qemu:///system net-list --all   # optional: find leftover 10.0.0.0/24 nets
 vagrant up
 cd ansible && ansible-playbook playbooks/health.yml
 ```
@@ -283,8 +319,8 @@ cd ansible && ansible-playbook playbooks/health.yml
 
 ```bash
 virsh -c qemu:///system net-list --all
-virsh -c qemu:///system net-dumpxml NAME | head   # find the conflict
-virsh -c qemu:///system net-destroy NAME          # if active
+virsh -c qemu:///system net-dumpxml NAME | head
+virsh -c qemu:///system net-destroy NAME
 virsh -c qemu:///system net-undefine NAME
 vagrant up
 ```
@@ -304,7 +340,7 @@ ansible domain_controllers,workstations -m ansible.builtin.include_role -a name=
 
 ## Stage 4 — Documentation site
 
-Hugo site in `docs/` (architecture, network map, machines, stages). CI deploys to GitHub Pages on push to `main`.
+This README is the single source for both GitHub and the Pages site. Hugo in `docs/` mounts it as the homepage and deploys on push to `main`.
 
 ```bash
 # Local preview
@@ -316,8 +352,6 @@ git push origin main
 ```
 
 One-time: repo **Settings → Pages → Source: GitHub Actions**.
-
-**Site:** https://brandonwhitmire.github.io/test-net/
 
 ### Verify
 

@@ -1,12 +1,5 @@
 {{ define "main" }}
-<article class="home">
-  <h1>{{ .Site.Title }}</h1>
-  <p class="lede">{{ .Site.Params.description }}</p>
+<article class="readme">
   {{ .Content }}
-  <ul class="page-list">
-    {{ range .Site.Menus.main }}
-    <li><a href="{{ .URL | relURL }}">{{ .Name }}</a></li>
-    {{ end }}
-  </ul>
 </article>
 {{ end }}
