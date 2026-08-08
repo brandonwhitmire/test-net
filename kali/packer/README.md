@@ -50,8 +50,7 @@ Root `Vagrantfile` boots this box with OVMF (private NVRAM under `.vagrant/`):
 
 ```bash
 # From repo root
-vagrant up kali
-vagrant ssh kali   # 10.0.0.50 on pentest-lab — no domain, no logging
+vagrant up kali && vagrant ssh kali
 ```
 
-Day-to-day snapshot helpers: `../README.md`.
+Lab-wide gold snapshots: [`../../snapshot.sh`](../../snapshot.sh).

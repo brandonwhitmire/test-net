@@ -3,9 +3,8 @@
 # Golden-image factory for the lab attacker box.
 # Lab runtime VM is defined in the repo-root Vagrantfile (`vagrant up kali`).
 #
-# Workflow:
-#   ./1_create_gold_image.sh   # provision from base → snapshot gold_image_kali
-#   vagrant package --output kali-box.box && vagrant box add -f kali-box kali-box.box
+# Prefer Packer (packer/) for kali-box. This factory Vagrantfile is optional.
+# Lab runtime gold snapshots (dc/linux/ws01/kali): ../snapshot.sh
 #
 # Creds: vagrant/vagrant
 

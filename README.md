@@ -8,7 +8,7 @@ Vagrant manages VMs. Ansible configures them. Stages 1–4 complete.
 - Domain: `lab.local` (alt: `lab.internal` if mDNS fights `.local`).
 - Ubuntu box: `generic/ubuntu2204` **4.3.12**.
 - Windows boxes: local Packer builds from [rgl/windows-vagrant](https://github.com/rgl/windows-vagrant) — never Vagrant Cloud.
-- Kali attacker: local golden box `kali-box` (factory + scripts in `kali/`) — not domain-joined, not logged.
+- Kali attacker: local golden box `kali-box` (Packer in `kali/packer/`) — not domain-joined, not logged.
 - Private net `pentest-lab` `10.0.0.0/24`, NAT outbound so guests can update.
 
 ## Credentials
@@ -63,7 +63,8 @@ vagrant box list | grep -E 'windows-2022|windows-11-24h2|ubuntu2204|kali-box'
 
 ```
 Vagrantfile
-kali/                          # Attacker: Packer (UEFI kali-box), snapshots, network bootstrap
+snapshot.sh                         # Gold snapshot / restore / overwrite all lab VMs
+kali/                          # Attacker: Packer (UEFI kali-box), network bootstrap, roles
 docs/                          # Hugo site → GitHub Pages
 .github/workflows/docs.yml
 packer/{README.md,lab.pkrvars.hcl}   # Windows boxes (rgl)
@@ -135,7 +136,6 @@ Box: local golden **`kali-box`** (UEFI/GPT — Vagrantfile boots it with OVMF).
 
 ```bash
 vagrant up kali && vagrant ssh kali
-# or: ./kali/0_run_attacker_box.sh
 ```
 
 On first create, Vagrant sets the lab IP on eth1 (`kali/files/lab-network.sh`) and then runs `ansible/playbooks/attackers.yml` — the `kali/roles/` toolset (`base`, `desktop`, `development`, `security_tools`) plus `kali_attacker` for lab wiring. It does not re-run on later `vagrant up`; use `vagrant provision kali` for that.
@@ -170,7 +170,23 @@ Debug a failed build with `PACKER_LOG=1 ./build.sh -on-error=ask`.
 
 **OVMF warning:** never point libvirt NVRAM at `/usr/share/edk2/x64/OVMF_VARS.4m.fd` — it gets clobbered. The repo vendors a template; restore the system file with `sudo cp kali/packer/ovmf/OVMF_VARS.4m.fd /usr/share/edk2/x64/OVMF_VARS.4m.fd`.
 
-Details and the snapshot-based gold-image factory: `kali/README.md` and `kali/packer/README.md`.
+Details: `kali/README.md` and `kali/packer/README.md`.
+
+### Gold snapshots (all lab VMs)
+
+After the first successful build, save a clean baseline for every machine. During testing you can wipe dirty state and restore:
+
+```bash
+./snapshot.sh take                 # snapshot "gold" in current state (provisions only if not created)
+./snapshot.sh save --halt          # alias of take; halt first, then snapshot
+./snapshot.sh restore              # discard current state, restore gold on all
+./snapshot.sh overwrite            # overwrite gold from current state
+./snapshot.sh overwrite --halt     # halt first, then overwrite gold
+./snapshot.sh delete               # delete gold snapshots
+./snapshot.sh list                 # check whether gold snapshots exist
+```
+
+Pass VM names to limit scope (`./snapshot.sh restore kali ws01`), and `-f` / `--force` to skip confirmations. Config (`LAB_VMS`, `SNAPSHOT_NAME`) lives at the top of `snapshot.sh`.
 
 ## Stage 2 — Sysmon everywhere
 

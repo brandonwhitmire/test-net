@@ -129,7 +129,7 @@ Vagrant.configure('2') do |config|
 
   # --- Kali attacker (external to domain — no AD join, no logging) ---
   # Packer UEFI gold: https://github.com/brandonwhitmire/personal-packer (kali.pkr.hcl)
-  # Snapshot helpers: kali/
+  # Lab gold snapshots: ./snapshot.sh (take|save / restore / overwrite / delete)
   config.vm.define 'kali' do |kali|
     kali.vm.box = 'kali-box'
     kali.vm.hostname = 'kali'

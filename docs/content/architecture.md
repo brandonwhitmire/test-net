@@ -7,7 +7,7 @@ weight: 10
 
 | Layer | Tool | Job |
 | ----- | ---- | --- |
-| Lifecycle | Vagrant + libvirt/KVM | `up` / `halt` / `ssh` / `destroy` |
+| Lifecycle | Vagrant + libvirt/KVM + `snapshot.sh` | take/save / restore / overwrite / delete |
 | Config | Ansible (host provisioner) | AD, Sysmon, ELK, shippers |
 | Images | Local Packer (rgl) + `kali/` gold | Windows boxes + `kali-box` — never Vagrant Cloud for Win/Kali gold |
 

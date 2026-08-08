@@ -17,7 +17,7 @@ weight: 30
 | `windows-2022-amd64` | Local Packer: `make build-windows-2022-libvirt` |
 | `windows-11-24h2-amd64` | Local Packer: `make build-windows-11-24h2-libvirt` |
 | `generic/ubuntu2204` `4.3.12` | Vagrant Cloud (libvirt) |
-| `kali-box` | Packer UEFI ([personal-packer](https://github.com/brandonwhitmire/personal-packer/blob/main/kali.pkr.hcl)); optional gold snapshots in `kali/` |
+| `kali-box` | Packer UEFI ([personal-packer](https://github.com/brandonwhitmire/personal-packer/blob/main/kali.pkr.hcl)); lab gold snapshots via `./snapshot.sh` |
 
 ## Seeded AD
 

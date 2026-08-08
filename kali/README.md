@@ -9,10 +9,10 @@ External to `lab.local` (no domain join, no Sysmon/ELK). Lives on `pentest-lab` 
 | `packer/` | Packer UEFI build → `kali-box` (from personal-packer) |
 | `files/lab-network.sh` | Provisioner: eth1 `10.0.0.50` only (see note below) |
 | `seed-mgmt-dhcp.sh` | Rescue for a `vagrant up` hung on the IP wait |
-| `0_run_attacker_box.sh` | `vagrant up kali` + SSH from repo root |
-| `1_` / `2_` / `3_` + `5_config` | Snapshot / gold helpers for the factory VM |
 | `roles/` | Attacker roles: `base`, `desktop`, `development`, `security_tools` |
-| `kalilinux.yml` | Gold-image factory entrypoint (runs those roles on the factory VM) |
+| `kalilinux.yml` | Optional factory entrypoint (roles on the factory VM in this dir) |
+
+Lab gold snapshots for **all** machines (including Kali): repo-root [`snapshot.sh`](../snapshot.sh).
 
 ## Quick start (lab)
 
