@@ -12,7 +12,51 @@ vagrant up
 cd ansible && ansible-playbook playbooks/health.yml
 ```
 
-Site: https://brandonwhitmire.github.io/test-net/
+## Prerequisites
+
+This includes the OS packages, Vagrant plugins, and Vagrant images (built via Packer from an external repo).
+
+```bash
+yay -S vagrant
+sudo pacman -S libvirt qemu-desktop ebtables dnsmasq bridge-utils python-pywinrm ansible packer
+packer plugins install github.com/hashicorp/qemu
+vagrant plugin install vagrant-libvirt vagrant-windows-sysprep   # required by rgl boxes
+
+# Symlink UEFI firmware for images to Arch Linux's normal location
+sudo pacman -S packer edk2-ovmf
+sudo ln -s /usr/share/edk2/x64/OVMF.4m.fd /usr/share/edk2/OVMF.fd
+
+# Ansible collections
+cd ansible && ansible-galaxy collection install -r requirements.yml
+```
+
+### Build Windows boxes
+
+```bash
+git clone https://github.com/rgl/windows-vagrant.git && cd windows-vagrant
+
+# Show build targets
+make
+
+# Build
+make build-windows-2022-uefi-libvirt build-windows-11-24h2-uefi-libvirt
+
+# Add to Vagrant images
+vagrant box add -f windows-2022-amd64 windows-2022-uefi-libvirt.box
+vagrant box add -f windows-11-24h2-amd64 windows-11-24h2-uefi-libvirt.box
+```
+
+### Build Kali box
+
+```bash
+# Build (resolves the current ISO + checksum automatically)
+cd kali/packer && ./build.sh
+
+# Add to Vagrant images
+vagrant box add -f kali-box output-kali/kali-box-libvirt-1.0.box
+```
+
+**OVMF warning:** never point libvirt NVRAM at `/usr/share/edk2/x64/OVMF_VARS.4m.fd` — it gets clobbered. The repo vendors a template; restore the system file with `sudo cp kali/packer/ovmf/OVMF_VARS.4m.fd /usr/share/edk2/x64/OVMF_VARS.4m.fd`.
 
 ### Data flow
 
@@ -83,49 +127,6 @@ While sealed, use lab IPs (not host forwarded ports) — those ports ride the ma
 | `alice` / `bob` / `charlie` | `LabUser123!!!` | AD users |
 
 Vars: `ansible/inventory/group_vars/all.yml` ↔ `packer/lab.pkrvars.hcl` (keep synced).
-
-## Prerequisites
-
-```bash
-# Host packages / plugins
-sudo pacman -S vagrant libvirt qemu-desktop ebtables dnsmasq bridge-utils python-pywinrm ansible
-vagrant plugin install vagrant-libvirt
-vagrant plugin install vagrant-windows-sysprep   # required by rgl boxes
-
-# Ansible collections
-cd ansible && ansible-galaxy collection install -r requirements.yml
-```
-
-Build + register Windows boxes — see `packer/README.md`, or:
-
-```bash
-git clone https://github.com/rgl/windows-vagrant.git
-
-make build-windows-2022-libvirt
-vagrant box add -f windows-2022-amd64 windows-2022-amd64-libvirt.box
-
-make build-windows-11-24h2-libvirt
-vagrant box add -f windows-11-24h2-amd64 windows-11-24h2-amd64-libvirt.box
-```
-
-#### Build `kali-box` with Packer
-
-Full from-scratch build: latest Kali installer ISO → preseeded UEFI install → Vagrant box. Takes a while (multi-GB ISO + install).
-
-```bash
-# One-time host prerequisites
-sudo pacman -S packer edk2-ovmf
-packer plugins install github.com/hashicorp/qemu
-
-# Build (resolves the current ISO + checksum automatically)
-cd kali/packer
-./build.sh
-
-# Register the result as kali-box
-vagrant box add -f kali-box output-kali/kali-box-libvirt-1.0.box
-```
-
-**OVMF warning:** never point libvirt NVRAM at `/usr/share/edk2/x64/OVMF_VARS.4m.fd` — it gets clobbered. The repo vendors a template; restore the system file with `sudo cp kali/packer/ovmf/OVMF_VARS.4m.fd /usr/share/edk2/x64/OVMF_VARS.4m.fd`.
 
 ## Machines
 
