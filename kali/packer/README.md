@@ -37,7 +37,7 @@ PACKER_LOG=1 ./build.sh -on-error=ask
 
 | What you see in the QEMU window | Cause |
 | ---- | ---- |
-| An installer error dialog, waiting for input | `preseed/late_command` returned non-zero. d-i stops and waits forever. Keep that chain short and guard optional steps with `\|\| true`. |
+| An installer error dialog, waiting for input | The wrapper now always exits 0, so this should not happen. If it does, Alt-F2 and `cat /target/tmp/preseed-late-wrapper.log`. After boot: `cat /var/log/preseed-late.log` (copy also at `/root/preseed-late.log`). |
 | Installer still copying/downloading packages | Genuinely slower than `ssh_timeout` (now `60m`). Slow mirror. |
 | A login prompt, install finished | SSH did not start, or `net.ifnames`/NIC naming left the box with no DHCP lease. |
 | Still at the boot menu / grub prompt | `boot_command` did not land. Bump `boot_wait` / `boot_key_interval`. |

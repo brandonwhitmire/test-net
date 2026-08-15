@@ -40,7 +40,7 @@ Vagrant.configure('2') do |config|
 
   # --- Domain Controller (Windows Server 2022) ---
   config.vm.define 'dc', primary: true do |dc|
-    dc.vm.box = 'windows-2022-amd64'
+    dc.vm.box = 'windows-2022-uefi-amd64-libvirt'
     # Local Packer/rgl build — no version pin (not from Vagrant Cloud)
     dc.vm.hostname = 'dc'
     dc.vm.communicator = 'winrm'
@@ -110,7 +110,7 @@ Vagrant.configure('2') do |config|
 
   # --- Windows 11 workstation ---
   config.vm.define 'ws01' do |ws|
-    ws.vm.box = 'windows-11-24h2-amd64'
+    ws.vm.box = 'windows-11-24h2-uefi-amd64-libvirt'
     ws.vm.hostname = 'ws01'
     ws.vm.communicator = 'winrm'
     ws.winrm.username = LAB_VAGRANT_USER

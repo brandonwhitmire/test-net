@@ -1,4 +1,4 @@
-# Local pentest lab (libvirt / KVM)
+# Local Pentest Lab
 
 Local AD + Sysmon + ELK lab to analyze pentesting actions via remote logging
 
@@ -38,27 +38,27 @@ git clone https://github.com/rgl/windows-vagrant.git && cd windows-vagrant
 # Show build targets
 make
 
-# Build
-make build-windows-2022-uefi-libvirt build-windows-11-24h2-uefi-libvirt
-
-# Add to Vagrant images
-vagrant box add -f windows-2022-amd64 windows-2022-uefi-libvirt.box
-vagrant box add -f windows-11-24h2-amd64 windows-11-24h2-uefi-libvirt.box
+# Build and add to Vagrant images
+make build-windows-2022-uefi-libvirt build-windows-11-24h2-uefi-libvirt && vagrant box add -f windows-2022-uefi-amd64-libvirt windows-2022-uefi-amd64-libvirt.box && vagrant box add -f windows-11-24h2-uefi-amd64-libvirt windows-11-24h2-uefi-amd64-libvirt.box
 ```
 
 ### Build Kali box
 
 ```bash
-# Build (resolves the current ISO + checksum automatically)
-cd kali/packer && ./build.sh
-
-# Add to Vagrant images
-vagrant box add -f kali-box output-kali/kali-box-libvirt-1.0.box
+# Build and add to Vagrant images
+cd kali/packer && ./build.sh && vagrant box add -f kali-box output-kali/kali-box-libvirt-1.0.box
 ```
 
 **OVMF warning:** never point libvirt NVRAM at `/usr/share/edk2/x64/OVMF_VARS.4m.fd` — it gets clobbered. The repo vendors a template; restore the system file with `sudo cp kali/packer/ovmf/OVMF_VARS.4m.fd /usr/share/edk2/x64/OVMF_VARS.4m.fd`.
 
-### Data flow
+
+## Health Check (configured and running properly)
+
+```bash
+cd ansible && ansible-playbook playbooks/health.yml
+```
+
+# Data flow
 
 ```
 dc / ws01  --Winlogbeat-->  Elasticsearch :9200  <--Filebeat--  linux01 (sysmon syslog)
@@ -102,13 +102,11 @@ dc / ws01  --Winlogbeat-->  Elasticsearch :9200  <--Filebeat--  linux01 (sysmon 
 - Kali: local golden `kali-box` (Packer in `kali/packer/`) — not domain-joined, not logged; **dual-homed** (mgmt eth0 = internet via `vagrant-libvirt` NAT, lab eth1 = `10.0.0.50`)
 - Guest DNS → DC `10.0.0.10` (domain members only; kali is external)
 - DHCP **disabled** on `pentest-lab` (static IPs only)
-- Kibana: <http://10.0.0.20:5601> · Elasticsearch: <http://10.0.0.20:9200> (security off — lab net only)
+- Kibana: <http://10.0.0.20:5601> · Elasticsearch: <http://10.0.0.20:9200>
 
-### Internet isolation (optional, hypervisor)
+### Internet Isolation
 
-Guest firewalls are the wrong tool here — malware inside a box can undo them. Instead, cut the **management NIC** (`vagrant-libvirt` NAT) from libvirt so the guest physically has no carrier on the internet path. Kali is never touched.
-
-`pentest-lab` is **isolated** (no NAT): lab peers still talk on `10.0.0.0/24`, but there is no route out via `10.0.0.1`. That closes the “add a default route via the lab gateway” bypass.
+While sealed, use lab IPs (not host forwarded ports) because `pentest-lab` is **isolated** (no NAT) from the Internet: lab peers still talk on `10.0.0.0/24`, but there is no route out via `10.0.0.1`
 
 ```bash
 ./isolate-network.sh seal-lab   # seal the lab (isolated net + unplug target mgmt NICs)
@@ -117,7 +115,6 @@ Guest firewalls are the wrong tool here — malware inside a box can undo them. 
 ./isolate-network.sh status
 ```
 
-While sealed, use lab IPs (not host forwarded ports) — those ports ride the management NIC.
 ## Credentials
 
 | Account | Password | Where |
@@ -126,7 +123,7 @@ While sealed, use lab IPs (not host forwarded ports) — those ports ride the ma
 | `Administrator` / `root` | `AdminUser123!!!` | Admin users |
 | `alice` / `bob` / `charlie` | `LabUser123!!!` | AD users |
 
-Vars: `ansible/inventory/group_vars/all.yml` ↔ `packer/lab.pkrvars.hcl` (keep synced).
+Vars (keep synced): `ansible/inventory/group_vars/all.yml` ↔ `packer/lab.pkrvars.hcl`
 
 ## Machines
 
@@ -135,30 +132,13 @@ Vars: `ansible/inventory/group_vars/all.yml` ↔ `packer/lab.pkrvars.hcl` (keep 
 | `dc` | `dc` | Windows Server 2022 | 10.0.0.10 | 4 GB | AD DS + DNS (`lab.local`) |
 | `linux` | `linux01` | Ubuntu 22.04 | 10.0.0.20 | 4 GB | Sysmon-for-Linux, ELK, Filebeat |
 | `ws01` | `ws01` | Windows 11 24H2 | 10.0.0.30 | 4 GB | Domain-joined workstation |
-| `kali` | `kali` | Kali (`kali-box`) | 10.0.0.50 | 4 GB | External attacker — no domain, no logging |
-
-### Boxes
-
-| Box | Source |
-| --- | ------ |
-| `windows-2022-amd64` | Local Packer: `make build-windows-2022-libvirt` |
-| `windows-11-24h2-amd64` | Local Packer: `make build-windows-11-24h2-libvirt` |
-| `generic/ubuntu2204` `4.3.12` | Vagrant Cloud (libvirt) |
-| `kali-box` | Packer UEFI in `kali/packer/` (see `kali/README.md`) |
+| `kali` | `kali` | Kali (`kali-box`) | 10.0.0.50 | 4 GB | External attacker |
 
 ### Seeded AD
 
 - OUs: `LabUsers`, `LabWorkstations`, `LabServers`, `LabGroups`
 - Groups: `LabAdmins`, `HelpDesk`, `Developers`
 - Users: `alice` (LabAdmins + Domain Admins), `bob` (HelpDesk), `charlie` (Developers)
-
-
-## Health check (all stages)
-
-```bash
-cd ansible
-ansible-playbook playbooks/health.yml
-```
 
 ### Gold snapshots (all lab VMs)
 
@@ -173,15 +153,6 @@ After the first successful build, save a clean baseline for every machine. Durin
 ./snapshot.sh delete               # delete gold snapshots
 ./snapshot.sh list                 # check whether gold snapshots exist
 ```
-
-## Sysmon everywhere
-
-Vendored configs (not fetched live):
-
-| Host | Agent | Config |
-| ---- | ----- | ------ |
-| dc, ws01 | Sysmon64 | SwiftOnSecurity → `roles/sysmon_windows/files/sysmonconfig.xml` |
-| linux01 | sysmonforlinux | MSTIC-Sysmon → `roles/sysmon_linux/files/sysmonconfig.xml` |
 
 ## Log aggregation (ELK)
 

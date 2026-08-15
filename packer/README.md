@@ -16,11 +16,11 @@ Source of truth: `lab.pkrvars.hcl` ↔ `ansible/inventory/group_vars/all.yml`
 
 ```bash
 # In your rgl/windows-vagrant clone
-make build-windows-2022-libvirt
-vagrant box add -f windows-2022-amd64 windows-2022-amd64-libvirt.box
+make build-windows-2022-uefi-libvirt
+vagrant box add -f windows-2022-uefi-amd64-libvirt windows-2022-uefi-amd64-libvirt.box
 
-make build-windows-11-24h2-libvirt
-vagrant box add -f windows-11-24h2-amd64 windows-11-24h2-amd64-libvirt.box
+make build-windows-11-24h2-uefi-libvirt
+vagrant box add -f windows-11-24h2-uefi-amd64-libvirt windows-11-24h2-uefi-amd64-libvirt.box
 ```
 
 rgl defaults ship `vagrant`/`vagrant` (and Admin often matches). Lab Ansible sets Administrator → `AdminUser123!!!`.

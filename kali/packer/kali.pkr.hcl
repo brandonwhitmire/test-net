@@ -27,7 +27,7 @@ source "qemu" "kali" {
   cpus                 = 2
   memory               = 4096
   disk_size            = local.kali_disk_size_gib * 1024
-  headless             = false
+  headless             = true
   iso_url              = var.kali_iso_url
   iso_checksum         = var.kali_iso_checksum
   http_directory       = "."
