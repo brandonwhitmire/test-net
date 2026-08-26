@@ -152,8 +152,6 @@ Vagrant.configure('2') do |config|
     kali.vm.box = 'kali-box'
     kali.vm.hostname = 'kali'
     kali.vm.box_check_update = false
-    # Keep Packer's insecure Vagrant key — insert_key breaks re-package / rebuilds.
-    kali.ssh.insert_key = false
 
     kali.vm.network :private_network,
                     ip: '10.0.0.50',
