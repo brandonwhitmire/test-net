@@ -160,7 +160,8 @@ Vagrant.configure('2') do |config|
                     libvirt__dhcp_enabled: false
 
     kali.vm.provider :libvirt do |lv|
-      lv.memory = 4096
+      #lv.memory = 4096
+      lv.memory = 8192
       lv.cpus = 2
       lv.graphics_type = 'spice'
       lv.video_type = 'qxl'
