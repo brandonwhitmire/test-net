@@ -159,6 +159,14 @@ Vagrant.configure('2') do |config|
                     libvirt__forward_mode: 'none',
                     libvirt__dhcp_enabled: false
 
+    # BloodHound CE listens on guest loopback; libvirt implements this as SSH -L
+    kali.vm.network :forwarded_port,
+                    guest: 8080,
+                    guest_ip: '127.0.0.1',
+                    host: 8080,
+                    host_ip: '127.0.0.1',
+                    id: 'bloodhound'
+
     kali.vm.provider :libvirt do |lv|
       #lv.memory = 4096
       lv.memory = 8192

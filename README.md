@@ -91,6 +91,7 @@ dc / ws01  --Winlogbeat-->  Elasticsearch :9200  <--Filebeat--  linux01 (sysmon 
 | `dc` | LDAPS | 1636 → 636 |
 | `linux` | SSH | 2222 → 22 |
 | `linux` | Kibana | 8888 → 5601 |
+| `kali` | BloodHound | 8080 → 127.0.0.1:8080 |
 | `ws01` | SMB | 3445 → 445 |
 | `ws01` | WinRM | 35985 → 5985 |
 | `ws01` | WinRM HTTPS | 35986 → 5986 |
